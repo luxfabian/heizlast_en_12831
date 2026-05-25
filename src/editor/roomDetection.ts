@@ -1,129 +1,10 @@
-import type { WallSegment, Room, Point2D } from '../model/types.js';
+import type { WallSegment, Room, Point2D, RoomCeiling, RoomFloor, BoundaryCategory } from '../model/types.js';
+import { DEFAULT_CEILING_PRESET_ID } from '../library/presets.js';
 import { polygonAreaM2, polygonSignedAreaMm2, insetPolygon } from './geometry.js';
 import { v4 as uuidv4 } from '../utils/uuid.js';
 
-interface GraphNode {
-  key: string;
-  point: Point2D;
-  neighbors: Map<string, string>; // neighborKey -> wallId
-}
-
 function pointKey(p: Point2D): string {
   return `${Math.round(p.x)},${Math.round(p.y)}`;
-}
-
-function buildGraph(walls: WallSegment[]): Map<string, GraphNode> {
-  const graph = new Map<string, GraphNode>();
-
-  const getOrCreate = (p: Point2D): GraphNode => {
-    const k = pointKey(p);
-    if (!graph.has(k)) {
-      graph.set(k, { key: k, point: { ...p }, neighbors: new Map() });
-    }
-    return graph.get(k)!;
-  };
-
-  for (const wall of walls) {
-    const sNode = getOrCreate(wall.start);
-    const eNode = getOrCreate(wall.end);
-    sNode.neighbors.set(eNode.key, wall.id);
-    eNode.neighbors.set(sNode.key, wall.id);
-  }
-
-  return graph;
-}
-
-/** Find all minimal simple cycles using DFS. Returns arrays of point keys forming cycles. */
-function findCycles(graph: Map<string, GraphNode>): string[][] {
-  const cycles: string[][] = [];
-  const visited = new Set<string>();
-
-  const dfs = (
-    current: string,
-    parent: string | null,
-    start: string,
-    path: string[]
-  ): void => {
-    path.push(current);
-    const node = graph.get(current)!;
-
-    for (const [neighbor] of node.neighbors) {
-      if (neighbor === parent) continue;
-      if (neighbor === start && path.length >= 3) {
-        cycles.push([...path]);
-        continue;
-      }
-      if (!visited.has(neighbor) && !path.includes(neighbor)) {
-        dfs(neighbor, current, start, path);
-      }
-    }
-    path.pop();
-  };
-
-  for (const [key] of graph) {
-    if (!visited.has(key)) {
-      dfs(key, null, key, []);
-      visited.add(key);
-    }
-  }
-
-  return cycles;
-}
-
-/** Remove duplicate cycles (same set of vertices) */
-function deduplicateCycles(cycles: string[][]): string[][] {
-  const seen = new Set<string>();
-  const result: string[][] = [];
-  for (const cycle of cycles) {
-    const sorted = [...cycle].sort().join('|');
-    if (!seen.has(sorted)) {
-      seen.add(sorted);
-      result.push(cycle);
-    }
-  }
-  return result;
-}
-
-/** Filter to only minimal cycles (not a superset of any smaller cycle) */
-function filterMinimalCycles(cycles: string[][]): string[][] {
-  const deduped = deduplicateCycles(cycles);
-  const sets = deduped.map(c => new Set(c));
-  return deduped.filter((_, i) => {
-    for (let j = 0; j < deduped.length; j++) {
-      if (i === j) continue;
-      if (sets[j].size < sets[i].size) {
-        let isSubset = true;
-        for (const v of sets[j]) {
-          if (!sets[i].has(v)) { isSubset = false; break; }
-        }
-        if (isSubset) return false;
-      }
-    }
-    return true;
-  });
-}
-
-function cycleToPolygon(cycle: string[], graph: Map<string, GraphNode>): Point2D[] {
-  return cycle.map(key => graph.get(key)!.point);
-}
-
-/** Ensure polygon is CCW (positive signed area) */
-function ensureCCW(poly: Point2D[]): Point2D[] {
-  if (polygonSignedAreaMm2(poly) < 0) return [...poly].reverse();
-  return poly;
-}
-
-/** Derive wall IDs in polygon edge order from the final (CCW-normalised) polygon.
- *  Graph edges are bidirectional so this works regardless of original cycle direction. */
-function polygonPointsToWallIds(polygon: Point2D[], graph: Map<string, GraphNode>): string[] {
-  const ids: string[] = [];
-  for (let i = 0; i < polygon.length; i++) {
-    const aKey = pointKey(polygon[i]);
-    const bKey = pointKey(polygon[(i + 1) % polygon.length]);
-    const wallId = graph.get(aKey)?.neighbors.get(bKey);
-    if (wallId) ids.push(wallId);
-  }
-  return ids;
 }
 
 export interface DetectedRoom {
@@ -132,26 +13,106 @@ export interface DetectedRoom {
   area: number; // m²
 }
 
+/**
+ * Planar half-edge face traversal.
+ *
+ * For each directed edge u→v, the next directed edge around the same face is
+ * v→w, where w is the neighbor of v immediately before u in v's CCW-sorted
+ * neighbor list (i.e. the first neighbor reached by rotating clockwise from
+ * the direction v→u).
+ *
+ * Interior faces in Y-down screen coordinates have positive signed area
+ * (CW traversal on screen = positive shoelace sum). Only those are returned.
+ */
 export function detectRooms(walls: WallSegment[]): DetectedRoom[] {
   if (walls.length < 3) return [];
 
   const wallById = new Map(walls.map(w => [w.id, w]));
-  const graph = buildGraph(walls);
-  const allCycles = findCycles(graph);
-  const minimal = filterMinimalCycles(allCycles);
 
-  return minimal
-    .map(cycle => {
-      const polygon = ensureCCW(cycleToPolygon(cycle, graph));
-      // Derive wall IDs from the CCW polygon so edge-index correspondence is exact.
-      const wallIds = polygonPointsToWallIds(polygon, graph);
-      // Compute internal area by insetting each edge by half the corresponding wall thickness.
+  // Build vertex → sorted-neighbor list and directed-edge → wallId map
+  const vertexPoints = new Map<string, Point2D>();
+  const adjList      = new Map<string, string[]>();
+  const edgeWallMap  = new Map<string, string>();
+
+  for (const wall of walls) {
+    const sk = pointKey(wall.start);
+    const ek = pointKey(wall.end);
+    vertexPoints.set(sk, { ...wall.start });
+    vertexPoints.set(ek, { ...wall.end });
+    if (!adjList.has(sk)) adjList.set(sk, []);
+    if (!adjList.has(ek)) adjList.set(ek, []);
+    if (!adjList.get(sk)!.includes(ek)) adjList.get(sk)!.push(ek);
+    if (!adjList.get(ek)!.includes(sk)) adjList.get(ek)!.push(sk);
+    edgeWallMap.set(`${sk}>${ek}`, wall.id);
+    edgeWallMap.set(`${ek}>${sk}`, wall.id);
+  }
+
+  // Sort each vertex's neighbors CCW by polar angle
+  for (const [vKey, neighbors] of adjList) {
+    const vp = vertexPoints.get(vKey)!;
+    neighbors.sort((a, b) => {
+      const pa = vertexPoints.get(a)!;
+      const pb = vertexPoints.get(b)!;
+      return Math.atan2(pa.y - vp.y, pa.x - vp.x) -
+             Math.atan2(pb.y - vp.y, pb.x - vp.x);
+    });
+  }
+
+  // For directed edge u→v, next edge in the same face: v→w where w is the
+  // predecessor of u in v's CCW neighbor list (= first CW rotation from v→u)
+  const nextEdge = (uKey: string, vKey: string): string => {
+    const nb = adjList.get(vKey)!;
+    const idx = nb.indexOf(uKey);
+    return nb[(idx - 1 + nb.length) % nb.length];
+  };
+
+  const visitedEdges = new Set<string>();
+  const results: DetectedRoom[] = [];
+
+  for (const [uKey, neighbors] of adjList) {
+    for (const vKey of neighbors) {
+      const startKey = `${uKey}>${vKey}`;
+      if (visitedEdges.has(startKey)) continue;
+
+      const faceKeys: string[] = [];
+      let cu = uKey, cv = vKey;
+      const limit = walls.length * 3 + 10;
+
+      for (let i = 0; i < limit; i++) {
+        const ek = `${cu}>${cv}`;
+        if (visitedEdges.has(ek)) break;
+        visitedEdges.add(ek);
+        faceKeys.push(cu);
+        const nw = nextEdge(cu, cv);
+        cu = cv;
+        cv = nw;
+      }
+
+      if (faceKeys.length < 3) continue;
+
+      const polygon = faceKeys.map(k => vertexPoints.get(k)!);
+
+      // Interior faces in Y-down coords have positive signed area
+      if (polygonSignedAreaMm2(polygon) <= 0) continue;
+
+      const wallIds: string[] = [];
+      for (let i = 0; i < faceKeys.length; i++) {
+        const a = faceKeys[i];
+        const b = faceKeys[(i + 1) % faceKeys.length];
+        const wId = edgeWallMap.get(`${a}>${b}`);
+        if (wId) wallIds.push(wId);
+      }
+
+      if (wallIds.length < 3) continue;
+
       const halfOffsets = wallIds.map(id => (wallById.get(id)?.thickness ?? 0) / 2);
       const internalPoly = insetPolygon(polygon, halfOffsets);
       const area = polygonAreaM2(internalPoly);
-      return { wallIds, polygon, area };
-    })
-    .filter(r => r.area > 0); // discard degenerate (walls so thick room collapses)
+      if (area > 0) results.push({ wallIds, polygon, area });
+    }
+  }
+
+  return results;
 }
 
 export function mergeDetectedRooms(
@@ -168,7 +129,13 @@ export function mergeDetectedRooms(
     });
 
     if (existing) {
-      updated.push({ ...existing, area: d.area });
+      const ceilings: RoomCeiling[] = existing.ceilings?.length > 0
+        ? existing.ceilings
+        : [defaultCeiling()];
+      const floors: RoomFloor[] = existing.floors?.length > 0
+        ? existing.floors
+        : [migrateFloor(existing)];
+      updated.push({ ...existing, ceilings, floors, area: d.area });
     } else {
       updated.push({
         id: uuidv4(),
@@ -176,13 +143,32 @@ export function mergeDetectedRooms(
         wallIds: d.wallIds,
         designTemperature: 20,
         ceilingHeight: defaultCeilingHeight,
-        floorType: 'ground',
+        floors: [defaultFloor()],
+        ceilings: [defaultCeiling()],
         area: d.area,
       });
     }
   }
 
   return updated;
+}
+
+function defaultCeiling(): RoomCeiling {
+  return { id: uuidv4(), uValue: 0.20, boundaryCategory: 'exterior', typePresetId: DEFAULT_CEILING_PRESET_ID };
+}
+
+function defaultFloor(): RoomFloor {
+  return { id: uuidv4(), uValue: 0.25, boundaryCategory: 'ground', typePresetId: 'floor_neubau' };
+}
+
+function migrateFloor(room: Room): RoomFloor {
+  const cat: BoundaryCategory =
+    room.floorType === 'above_room' ? 'adj_heated' :
+    room.floorType === 'exterior'   ? 'exterior'   : 'ground';
+  const presetId =
+    cat === 'adj_heated' ? 'floor_above' :
+    cat === 'exterior'   ? 'floor_ext'   : 'floor_neubau';
+  return { id: uuidv4(), uValue: room.floorUValue ?? 0.25, boundaryCategory: cat, typePresetId: presetId };
 }
 
 /** Find all wall endpoint coordinates for snap targets */

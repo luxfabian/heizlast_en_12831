@@ -86,7 +86,7 @@ const roomsHeaderCount  = document.getElementById('rooms-header-count');
 function refreshRoomPanel(): void {
   const floor = editor.getProject().floors[0];
   if (roomsHeaderCount) roomsHeaderCount.textContent = `(${floor.rooms.length})`;
-  renderRoomPanel(roomsContent, floor);
+  renderRoomPanel(roomsContent, floor, editor);
 }
 refreshRoomPanel();
 

@@ -1,4 +1,5 @@
 import type { Floor, Room } from '../model/types.js';
+import type { Editor } from '../editor/editorState.js';
 import { getBoundaryCategoryLabel } from '../editor/adjacency.js';
 import { wallLength } from '../editor/geometry.js';
 
@@ -19,7 +20,7 @@ function el<K extends keyof HTMLElementTagNameMap>(
 
 // ---- Main entry ----
 
-export function renderRoomPanel(container: HTMLElement, floor: Floor): void {
+export function renderRoomPanel(container: HTMLElement, floor: Floor, editor?: Editor): void {
   container.innerHTML = '';
   const rooms = floor.rooms;
 
@@ -29,13 +30,13 @@ export function renderRoomPanel(container: HTMLElement, floor: Floor): void {
   }
 
   for (const room of rooms) {
-    container.appendChild(makeRoomEntry(room, floor));
+    container.appendChild(makeRoomEntry(room, floor, editor));
   }
 }
 
 // ---- Room entry (header + collapsible body) ----
 
-function makeRoomEntry(room: Room, floor: Floor): HTMLDivElement {
+function makeRoomEntry(room: Room, floor: Floor, editor?: Editor): HTMLDivElement {
   const isCollapsed = !expandedRooms.has(room.id);
   const entry = el('div', { class: 'room-entry' });
 
@@ -64,7 +65,7 @@ function makeRoomEntry(room: Room, floor: Floor): HTMLDivElement {
   // Body
   const body = el('div', { class: 'room-entry-body' });
   body.style.display = isCollapsed ? 'none' : '';
-  buildRoomBody(body, room, floor);
+  buildRoomBody(body, room, floor, editor);
   entry.appendChild(body);
 
   const doToggle = () => {
@@ -83,91 +84,106 @@ function makeRoomEntry(room: Room, floor: Floor): HTMLDivElement {
 
 // ---- Room body: element breakdown table ----
 
-function buildRoomBody(container: HTMLElement, room: Room, floor: Floor): void {
+function buildRoomBody(container: HTMLElement, room: Room, floor: Floor, editor?: Editor): void {
   const table = el('table', { class: 'room-breakdown-table' });
   const thead = el('thead');
 
   if (room.heizlastResult) {
     thead.appendChild(el('tr', {},
       el('th', {}, 'Element'),
-      el('th', { class: 'num' }, 'Fläche'),
-      el('th', { class: 'num' }, 'Verlust'),
+      el('th', { class: 'num' }, 'm²'),
+      el('th', { class: 'num' }, 'W'),
     ));
     table.appendChild(thead);
 
+    // Build per-(type,category) counters for numbered labels
+    const counters = new Map<string, number>();
+    const count = (key: string) => { const n = (counters.get(key) ?? 0) + 1; counters.set(key, n); return n; };
+
     const tbody = el('tbody');
     for (const row of room.heizlastResult.elementBreakdown) {
-      const label = elementLabel(row.elementId, row.elementType, floor);
-      const lossW = Math.round(row.heatLoss);
-      const tr = el('tr', { class: row.heatLoss < 0.5 ? 'row-zero' : '' },
+      const { label, wallId, openingId } = elementLabel(row.elementId, row.elementType, floor, room, count);
+      const lossW    = Math.round(row.heatLoss);
+      const canClick = !!(wallId || openingId);
+      const tr = el('tr', { class: [row.heatLoss < 0.5 ? 'row-zero' : '', canClick ? 'row-clickable' : ''].join(' ').trim() },
         el('td', {}, label),
         el('td', { class: 'num' }, `${row.area.toFixed(2)}`),
         el('td', { class: 'num loss-val' }, `${lossW}`),
       );
+      if (canClick && editor) {
+        tr.addEventListener('click',      () => editor.highlightElement(wallId, openingId));
+        tr.addEventListener('mouseleave', () => editor.highlightElement());
+      }
       tbody.appendChild(tr);
     }
     table.appendChild(tbody);
 
-    // Totals footer
     const tfoot = el('tfoot');
     const { transmissionLoss, ventilationLoss, totalLoss } = room.heizlastResult;
     tfoot.appendChild(el('tr', { class: 'foot-transmission' },
-      el('td', {}, 'Σ Transmission'),
-      el('td', { class: 'num' }, ''),
+      el('td', {}, 'Σ Transmission'), el('td', { class: 'num' }, ''),
       el('td', { class: 'num loss-val' }, `${Math.round(transmissionLoss)}`),
     ));
     tfoot.appendChild(el('tr', { class: 'foot-ventilation' },
-      el('td', {}, 'Σ Lüftung'),
-      el('td', { class: 'num' }, ''),
+      el('td', {}, 'Σ Lüftung'), el('td', { class: 'num' }, ''),
       el('td', { class: 'num loss-val' }, `${Math.round(ventilationLoss)}`),
     ));
     tfoot.appendChild(el('tr', { class: 'foot-total' },
-      el('td', {}, 'Gesamt'),
-      el('td', { class: 'num' }, ''),
+      el('td', {}, 'Gesamt'), el('td', { class: 'num' }, ''),
       el('td', { class: 'num loss-val' }, `${Math.round(totalLoss)} W`),
     ));
     table.appendChild(tfoot);
 
   } else {
-    // Geometry-only: show areas without heat loss
+    // Geometry-only view
     thead.appendChild(el('tr', {},
       el('th', {}, 'Element'),
       el('th', { class: 'num' }, 'm²'),
     ));
     table.appendChild(thead);
 
+    const counters = new Map<string, number>();
+    const count = (key: string) => { const n = (counters.get(key) ?? 0) + 1; counters.set(key, n); return n; };
+
     const tbody = el('tbody');
     for (const wallId of room.wallIds) {
       const wall = floor.walls.find(w => w.id === wallId);
       if (!wall) continue;
       const wallOpenings = floor.openings.filter(o => o.wallId === wallId);
-      const grossM2 = (wallLength(wall.start, wall.end) * room.ceilingHeight) / 1e6;
-      const openM2  = wallOpenings.reduce((s, o) => s + (o.width * o.height) / 1e6, 0);
-      const netM2   = Math.max(0, grossM2 - openM2);
-
-      tbody.appendChild(el('tr', {},
-        el('td', {}, getBoundaryCategoryLabel(wall.boundaryCategory)),
+      const grossM2  = (wallLength(wall.start, wall.end) * room.ceilingHeight) / 1e6;
+      const openM2   = wallOpenings.reduce((s, o) => s + (o.width * o.height) / 1e6, 0);
+      const netM2    = Math.max(0, grossM2 - openM2);
+      const catLabel = getBoundaryCategoryLabel(wall.boundaryCategory);
+      const n        = count(`wall_${wall.boundaryCategory}`);
+      const tr = el('tr', { class: 'row-clickable' },
+        el('td', {}, `${catLabel} ${n}`),
         el('td', { class: 'num' }, `${netM2.toFixed(2)}`),
-      ));
+      );
+      if (editor) {
+        tr.addEventListener('click',      () => editor.highlightElement(wall.id));
+        tr.addEventListener('mouseleave', () => editor.highlightElement());
+      }
+      tbody.appendChild(tr);
 
       for (const op of wallOpenings) {
-        const opLabel = op.type === 'window' ? '↳ Fenster' : op.type === 'door' ? '↳ Tür' : '↳ Garagentor';
-        tbody.appendChild(el('tr', { class: 'row-opening' },
-          el('td', {}, opLabel),
+        const opBase  = op.type === 'window' ? 'Fenster' : op.type === 'door' ? 'Tür' : 'Garagentor';
+        const opN     = count(op.type);
+        const opLabel = op.label ? op.label : `${opBase} ${opN}`;
+        const opTr = el('tr', { class: 'row-opening row-clickable' },
+          el('td', {}, `↳ ${opLabel}`),
           el('td', { class: 'num' }, `${((op.width * op.height) / 1e6).toFixed(2)}`),
-        ));
+        );
+        if (editor) {
+          opTr.addEventListener('click',      () => editor.highlightElement(undefined, op.id));
+          opTr.addEventListener('mouseleave', () => editor.highlightElement());
+        }
+        tbody.appendChild(opTr);
       }
     }
 
     if (room.area != null) {
-      tbody.appendChild(el('tr', {},
-        el('td', {}, 'Boden'),
-        el('td', { class: 'num' }, `${room.area.toFixed(2)}`),
-      ));
-      tbody.appendChild(el('tr', {},
-        el('td', {}, 'Decke'),
-        el('td', { class: 'num' }, `${room.area.toFixed(2)}`),
-      ));
+      tbody.appendChild(el('tr', {}, el('td', {}, 'Boden'), el('td', { class: 'num' }, `${room.area.toFixed(2)}`)));
+      tbody.appendChild(el('tr', {}, el('td', {}, 'Decke'), el('td', { class: 'num' }, `${room.area.toFixed(2)}`)));
     }
 
     table.appendChild(tbody);
@@ -179,19 +195,45 @@ function buildRoomBody(container: HTMLElement, room: Room, floor: Floor): void {
   container.appendChild(table);
 }
 
-// ---- Element label ----
+// ---- Element label with numbering ----
 
-function elementLabel(elementId: string, elementType: string, floor: Floor): string {
+function elementLabel(
+  elementId: string,
+  elementType: string,
+  floor: Floor,
+  room: Room,
+  count: (key: string) => number,
+): { label: string; wallId?: string; openingId?: string } {
   switch (elementType) {
-    case 'floor':       return 'Boden';
-    case 'ceiling':     return 'Decke';
-    case 'window':      return 'Fenster';
-    case 'door':        return 'Tür';
-    case 'garage_door': return 'Garagentor';
     case 'wall': {
       const wall = floor.walls.find(w => w.id === elementId);
-      return wall ? getBoundaryCategoryLabel(wall.boundaryCategory) : 'Wand';
+      if (!wall) return { label: 'Wand' };
+      const catLabel = getBoundaryCategoryLabel(wall.boundaryCategory);
+      const n = count(`wall_${wall.boundaryCategory}`);
+      return { label: `${catLabel} ${n}`, wallId: wall.id };
     }
-    default: return elementType;
+    case 'window':
+    case 'door':
+    case 'garage_door': {
+      const op = floor.openings.find(o => o.id === elementId);
+      const base = elementType === 'window' ? 'Fenster' : elementType === 'door' ? 'Tür' : 'Garagentor';
+      const n    = count(elementType);
+      const name = op?.label ? op.label : `${base} ${n}`;
+      return { label: name, openingId: elementId };
+    }
+    case 'floor': {
+      const idx   = parseInt(elementId.split('_floor_')[1] ?? '0', 10);
+      const flr   = room.floors?.[idx];
+      const label = flr?.label ?? (room.floors?.length > 1 ? `Boden ${idx + 1}` : 'Boden');
+      return { label };
+    }
+    case 'ceiling': {
+      const idx   = parseInt(elementId.split('_ceiling_')[1] ?? '0', 10);
+      const ceil  = room.ceilings?.[idx];
+      const label = ceil?.label ?? (room.ceilings?.length > 1 ? `Decke ${idx + 1}` : 'Decke');
+      return { label };
+    }
+    default:
+      return { label: elementType };
   }
 }

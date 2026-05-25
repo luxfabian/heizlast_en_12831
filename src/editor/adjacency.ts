@@ -28,7 +28,9 @@ export function updateAdjacency(floor: Floor): Floor {
       const t2 = roomTempMap.get(r2id) ?? 20;
       const autoCat: BoundaryCategory = Math.abs(t1 - t2) <= 4 ? 'adj_heated' : 'adj_reduced';
       const isAdjacentCategory =
-        wall.boundaryCategory === 'adj_heated' || wall.boundaryCategory === 'adj_reduced';
+        wall.boundaryCategory === 'adj_heated' ||
+        wall.boundaryCategory === 'adj_reduced' ||
+        wall.boundaryCategory === 'adj_neighbor';
       return {
         ...wall,
         boundaryCategory: isAdjacentCategory ? wall.boundaryCategory : autoCat,

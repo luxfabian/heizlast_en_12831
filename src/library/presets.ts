@@ -1,5 +1,12 @@
 import type { BoundaryCategory } from '../model/types.js';
 
+export interface CeilingTypePreset {
+  id: string;
+  name: string;
+  uValue: number;
+  defaultCategory: BoundaryCategory;
+}
+
 export interface WallTypePreset {
   id: string;
   name: string;
@@ -60,6 +67,30 @@ export const GARAGE_PRESETS: OpeningTypePreset[] = [
   { id: 'garage_insul',   name: '240×200 iso', type: 'garage_door', width: 2400, height: 2000, uValue: 1.0 },
 ];
 
+export const CEILING_PRESETS: CeilingTypePreset[] = [
+  // ── Roofs (exterior-facing) ──────────────────────────────────
+  { id: 'roof_passive',   name: 'Dach Passivhaus',       uValue: 0.10, defaultCategory: 'exterior' },
+  { id: 'roof_kfw40',     name: 'Dach KfW40',            uValue: 0.12, defaultCategory: 'exterior' },
+  { id: 'roof_kfw55',     name: 'Dach KfW55',            uValue: 0.14, defaultCategory: 'exterior' },
+  { id: 'roof_neubau',    name: 'Dach GEG 2024',         uValue: 0.20, defaultCategory: 'exterior' },
+  { id: 'roof_altbau',    name: 'Dach unsaniert',        uValue: 0.80, defaultCategory: 'exterior' },
+  // ── Ceiling below unheated attic / cellar ────────────────────
+  { id: 'ceil_dachboden', name: 'Decke zu Dachboden',    uValue: 0.25, defaultCategory: 'unheated' },
+  { id: 'ceil_keller',    name: 'Decke zu Keller',       uValue: 0.30, defaultCategory: 'unheated' },
+  // ── Inter-floor (heated room above) ──────────────────────────
+  { id: 'ceil_beheizt',   name: 'Decke zu beheiztem Raum', uValue: 0.40, defaultCategory: 'adj_heated' },
+];
+
+export const FLOOR_PRESETS: CeilingTypePreset[] = [
+  { id: 'floor_kfw40',    name: 'Bodenplatte KfW40',     uValue: 0.15, defaultCategory: 'ground' },
+  { id: 'floor_neubau',   name: 'Bodenplatte GEG 2024',  uValue: 0.25, defaultCategory: 'ground' },
+  { id: 'floor_altbau',   name: 'Bodenplatte unsaniert', uValue: 0.50, defaultCategory: 'ground' },
+  { id: 'floor_above',    name: 'Decke über beheiztem Raum', uValue: 0.40, defaultCategory: 'adj_heated' },
+  { id: 'floor_ext',      name: 'Decke über Außenluft',  uValue: 0.20, defaultCategory: 'exterior' },
+];
+
+export const DEFAULT_CEILING_PRESET_ID = 'roof_neubau';
+
 /** All opening presets in one flat list */
 export const ALL_OPENING_PRESETS: OpeningTypePreset[] = [
   ...WINDOW_PRESETS,
@@ -73,6 +104,10 @@ export function getWallPreset(id: string): WallTypePreset | undefined {
 
 export function getOpeningPreset(id: string): OpeningTypePreset | undefined {
   return ALL_OPENING_PRESETS.find(p => p.id === id);
+}
+
+export function getCeilingPreset(id: string): CeilingTypePreset | undefined {
+  return [...CEILING_PRESETS, ...FLOOR_PRESETS].find(p => p.id === id);
 }
 
 /** Default active presets for a fresh session */

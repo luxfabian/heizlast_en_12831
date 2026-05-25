@@ -43,16 +43,44 @@ export interface Opening {
   label?: string;
 }
 
+/** Shared structure for ceiling and floor surface elements */
+export interface ThermalSurface {
+  id: string;
+  label?: string;
+  uValue: number;              // W/m²K
+  boundaryCategory: BoundaryCategory;
+  /** °C — used when boundaryCategory is 'unheated', 'adj_neighbor', or 'adj_reduced' */
+  unheatedSpaceTemp?: number;
+  /** Room ID on the other side (adj_heated/adj_reduced between storeys) */
+  adjacentRoomId?: string;
+  /** m² — required when room has multiple surfaces; optional for single (defaults to room.area) */
+  areaOverride?: number;
+  typePresetId?: string;
+}
+
+export type RoomCeiling = ThermalSurface;
+export type RoomFloor   = ThermalSurface;
+
 export interface Room {
   id: string;
   label: string;
   wallIds: string[]; // ordered boundary wall IDs (from auto-detection)
   designTemperature: number; // °C
   ceilingHeight: number;     // mm
-  floorType: 'ground' | 'above_room' | 'exterior';
+  /** One or more floor surface elements */
+  floors: RoomFloor[];
+  /** One or more ceiling surface elements */
+  ceilings: RoomCeiling[];
+  /** m³ — manual volume override; required when surfaces produce irregular geometry */
+  volumeOverride?: number;
   minAirChanges?: number;    // h⁻¹ override
   area?: number;             // m², computed by room detection
   heizlastResult?: RoomHeizlastResult;
+  // ── legacy fields (kept for migration from old saved projects) ──
+  /** @deprecated use floors[0].boundaryCategory */
+  floorType?: 'ground' | 'above_room' | 'exterior';
+  /** @deprecated use floors[0].uValue */
+  floorUValue?: number;
 }
 
 export interface HullGroup {

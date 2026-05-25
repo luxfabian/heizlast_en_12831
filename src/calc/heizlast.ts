@@ -7,7 +7,7 @@ import { wallLength } from '../editor/geometry.js';
 
 const DEFAULT_MIN_AIR_CHANGES = 0.5;
 const DEFAULT_U_FLOOR         = 0.25; // W/m²K
-const DEFAULT_U_CEILING       = 0.20; // W/m²K
+const DEFAULT_U_CEILING       = 0.20; // W/m²K — fallback for rooms without ceilings array
 
 /** Temperature correction factor per DIN EN 12831 §6.3.1.2 */
 export function computeFij(params: {
@@ -108,29 +108,59 @@ export function calculateRoomHeizlast(
     }
   }
 
-  // Floor
+  // Floors
   if (room.area && room.area > 0) {
-    const floorCat  = room.floorType === 'ground' ? 'ground' : 'exterior' as BoundaryCategory;
-    const floorFij  = computeFij({ tInt, tAdj: tE, tE, category: floorCat });
-    breakdown.push({
-      elementId: `${room.id}_floor`, elementType: 'floor', boundaryCategory: floorCat,
-      area: room.area, uValue: DEFAULT_U_FLOOR, fij: floorFij,
-      actualDeltaT: floorFij * (tInt - tE),
-      heatLoss: room.area * DEFAULT_U_FLOOR * floorFij * (tInt - tE),
-    });
+    const floorSurfaces = room.floors?.length > 0
+      ? room.floors
+      : [{
+          id: `${room.id}_floor_fallback`,
+          uValue: room.floorUValue ?? DEFAULT_U_FLOOR,
+          boundaryCategory: (room.floorType === 'above_room' ? 'adj_heated'
+            : room.floorType === 'exterior' ? 'exterior' : 'ground') as BoundaryCategory,
+        }];
 
-    // Ceiling (Phase 1: always exterior top floor)
-    const ceilFij = computeFij({ tInt, tAdj: tE, tE, category: 'exterior' });
-    breakdown.push({
-      elementId: `${room.id}_ceiling`, elementType: 'ceiling', boundaryCategory: 'exterior',
-      area: room.area, uValue: DEFAULT_U_CEILING, fij: ceilFij,
-      actualDeltaT: ceilFij * (tInt - tE),
-      heatLoss: room.area * DEFAULT_U_CEILING * ceilFij * (tInt - tE),
-    });
+    for (let fi = 0; fi < floorSurfaces.length; fi++) {
+      const flr  = floorSurfaces[fi];
+      const area = flr.areaOverride ?? room.area;
+      if (area <= 0) continue;
+      const tAdj = (flr.boundaryCategory === 'adj_heated' || flr.boundaryCategory === 'adj_reduced')
+        ? (flr.adjacentRoomId ? (allRooms.find(r => r.id === flr.adjacentRoomId)?.designTemperature ?? tE) : tE)
+        : tE;
+      const floorFij = computeFij({ tInt, tAdj, tE, category: flr.boundaryCategory, unheatedSpaceTemp: flr.unheatedSpaceTemp });
+      breakdown.push({
+        elementId: `${room.id}_floor_${fi}`, elementType: 'floor', boundaryCategory: flr.boundaryCategory,
+        area, uValue: flr.uValue, fij: floorFij,
+        actualDeltaT: floorFij * (tInt - tE),
+        heatLoss: area * flr.uValue * floorFij * (tInt - tE),
+      });
+    }
+
+    // Ceilings — iterate all ceiling elements
+    const ceilings = room.ceilings?.length > 0
+      ? room.ceilings
+      : [{ id: `${room.id}_ceil_fallback`, uValue: DEFAULT_U_CEILING, boundaryCategory: 'exterior' as BoundaryCategory }];
+
+    for (let ci = 0; ci < ceilings.length; ci++) {
+      const ceil = ceilings[ci];
+      const area = ceil.areaOverride ?? room.area;
+      if (area <= 0) continue;
+
+      const tAdj = (ceil.boundaryCategory === 'adj_heated' || ceil.boundaryCategory === 'adj_reduced')
+        ? (ceil.adjacentRoomId ? (allRooms.find(r => r.id === ceil.adjacentRoomId)?.designTemperature ?? tE) : tE)
+        : tE;
+      const fij         = computeFij({ tInt, tAdj, tE, category: ceil.boundaryCategory, unheatedSpaceTemp: ceil.unheatedSpaceTemp });
+      const actualDeltaT = fij * (tInt - tE);
+      breakdown.push({
+        elementId: `${room.id}_ceiling_${ci}`, elementType: 'ceiling',
+        boundaryCategory: ceil.boundaryCategory,
+        area, uValue: ceil.uValue, fij, actualDeltaT,
+        heatLoss: area * ceil.uValue * fij * (tInt - tE),
+      });
+    }
   }
 
   const transmissionLoss = breakdown.reduce((s, e) => s + e.heatLoss, 0);
-  const volumeM3         = (room.area ?? 0) * (room.ceilingHeight / 1000);
+  const volumeM3         = room.volumeOverride ?? ((room.area ?? 0) * (room.ceilingHeight / 1000));
   const nMin             = room.minAirChanges ?? DEFAULT_MIN_AIR_CHANGES;
   const ventilationLoss  = 0.34 * volumeM3 * nMin * (tInt - tE);
 

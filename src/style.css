@@ -964,6 +964,8 @@ h4 {
 
 .room-breakdown-table .row-zero td { color: var(--text-dim); }
 .room-breakdown-table .row-opening td { color: var(--text-dim); padding-left: 8px; }
+.room-breakdown-table .row-clickable { cursor: pointer; }
+.room-breakdown-table .row-clickable:hover td { background: rgba(59,130,246,0.10); }
 
 .room-breakdown-table tfoot td {
   padding-top: 3px;
@@ -1233,6 +1235,45 @@ h4 {
   font-family: "Courier New", monospace;
   color: var(--text-dim);
   padding: 4px 0 2px;
+}
+
+/* ── Ceiling section ─────────────────────────────── */
+.ceil-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 5px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.ceil-section-header .panel-section-title {
+  border-bottom: none;
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+
+.ceil-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 8px;
+  margin-bottom: 8px;
+}
+
+.ceil-card-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.ceil-label-inp {
+  flex: 1;
+  min-width: 0;
+  font-size: 11px;
+  height: 26px;
+  padding: 0 6px;
 }
 
 .unit {

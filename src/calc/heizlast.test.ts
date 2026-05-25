@@ -20,6 +20,8 @@ function makeRoom(id: string, wallIds: string[], overrides: Partial<Room> = {}):
     id,
     label: 'Testraum',
     wallIds,
+    floors:   [{ id: `${id}_floor`, uValue: 0.25, boundaryCategory: 'ground' }],
+    ceilings: [{ id: `${id}_ceil`,  uValue: 0.20, boundaryCategory: 'exterior' }],
     designTemperature: 20,
     ceilingHeight: 2500,
     floorType: 'ground',

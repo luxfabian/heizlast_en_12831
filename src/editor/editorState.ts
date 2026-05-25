@@ -494,6 +494,13 @@ export class Editor {
   setHeizlastResult(result: HeizlastResult | undefined): void { this.state.heizlastResult = result; this.notify(); }
   setShowHeatMap(show: boolean): void { this.state.showHeatMap = show; this.notify(); }
 
+  /** Highlight a wall or opening on the canvas without rebuilding the property panel. */
+  highlightElement(wallId?: string, openingId?: string): void {
+    this.state.hoveredWallId     = wallId;
+    this.state.selectedOpeningId = openingId;
+    this.notifyRender();
+  }
+
   setActiveWallPreset(id: string): void { this.state.activeWallPresetId = id; this.notify(); }
   setActiveOpeningPreset(type: 'window' | 'door' | 'garage_door', id: string): void {
     if (type === 'window') this.state.activeWindowPresetId = id;
