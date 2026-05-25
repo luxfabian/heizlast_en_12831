@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Heizlastberechnung DIN EN 12831</title>
+    <style>
+      /* Inline critical dark background to prevent flash */
+      html, body { background: #0f1117; margin: 0; }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+
+      <!-- ══════════════════════════════ TOOLBAR ══════════════════════════════ -->
+      <div id="toolbar">
+
+        <div class="toolbar-brand">
+          <!-- Blueprint grid icon -->
+          <svg class="tool-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2">
+            <rect x="2" y="2" width="12" height="12" rx="1"/>
+            <line x1="2" y1="6" x2="14" y2="6"/><line x1="2" y1="10" x2="14" y2="10"/>
+            <line x1="6" y1="2" x2="6" y2="14"/><line x1="10" y1="2" x2="10" y2="14"/>
+          </svg>
+          Heizlast EN 12831
+        </div>
+
+        <div class="toolbar-right">
+
+        <!-- Drawing tools -->
+        <div class="toolbar-group">
+          <button class="btn-tool" data-tool="select" title="Auswahl – Klicken / Ziehen zum Verschieben (Q)">
+            <svg class="tool-icon" viewBox="0 0 16 16" fill="none">
+              <path d="M3 2 L3 13 L6.5 9.5 L9 14 L10.5 13.3 L8 8 L12 8 Z"
+                    stroke="currentColor" stroke-width="1.1" fill="none"/>
+            </svg>
+            Auswahl
+          </button>
+        </div>
+
+        <div class="toolbar-sep"></div>
+
+        <!-- View controls -->
+        <div class="toolbar-group">
+          <span class="toolbar-label">Ansicht</span>
+          <button class="btn active" id="grid-toggle" title="Raster an/aus">
+            <svg class="tool-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1">
+              <line x1="1" y1="5"  x2="15" y2="5"/>
+              <line x1="1" y1="9"  x2="15" y2="9"/>
+              <line x1="1" y1="13" x2="15" y2="13"/>
+              <line x1="5"  y1="1" x2="5"  y2="15"/>
+              <line x1="9"  y1="1" x2="9"  y2="15"/>
+              <line x1="13" y1="1" x2="13" y2="15"/>
+            </svg>
+            Raster
+          </button>
+          <button class="btn" id="heatmap-toggle" title="Wärmekarte ein/aus">
+            <svg class="tool-icon" viewBox="0 0 16 16" fill="none">
+              <defs>
+                <linearGradient id="hg" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0%" stop-color="#3b82f6"/>
+                  <stop offset="100%" stop-color="#ef4444"/>
+                </linearGradient>
+              </defs>
+              <rect x="2" y="4" width="12" height="8" rx="2" fill="url(#hg)" opacity="0.7"/>
+            </svg>
+            Wärme
+          </button>
+        </div>
+
+        <div class="toolbar-sep"></div>
+
+        <!-- Zoom -->
+        <div class="toolbar-group">
+          <button class="btn" id="zoom-out" title="Herauszoomen">
+            <svg class="tool-icon" viewBox="0 0 16 16" stroke="currentColor" fill="none" stroke-width="1.4">
+              <circle cx="7" cy="7" r="5"/><line x1="10.5" y1="10.5" x2="14" y2="14"/>
+              <line x1="4.5" y1="7" x2="9.5" y2="7"/>
+            </svg>
+          </button>
+          <button class="btn" id="zoom-reset" title="Zoom zurücksetzen">1:1</button>
+          <button class="btn" id="zoom-in" title="Hereinzoomen">
+            <svg class="tool-icon" viewBox="0 0 16 16" stroke="currentColor" fill="none" stroke-width="1.4">
+              <circle cx="7" cy="7" r="5"/><line x1="10.5" y1="10.5" x2="14" y2="14"/>
+              <line x1="7" y1="4.5" x2="7" y2="9.5"/><line x1="4.5" y1="7" x2="9.5" y2="7"/>
+            </svg>
+          </button>
+        </div>
+
+        <div class="toolbar-sep"></div>
+
+        <!-- Undo / Redo / New -->
+        <div class="toolbar-group">
+          <button class="btn" id="undo-btn" title="Rückgängig (Ctrl+Z)">
+            <svg class="tool-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4">
+              <path d="M3 8 Q3 3 9 3 Q14 3 14 8 Q14 13 9 13 L6 13"/>
+              <path d="M6 10 L3 8 L6 5" fill="none"/>
+            </svg>
+          </button>
+          <button class="btn" id="redo-btn" title="Wiederholen (Ctrl+Y)">
+            <svg class="tool-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4">
+              <path d="M13 8 Q13 3 7 3 Q2 3 2 8 Q2 13 7 13 L10 13"/>
+              <path d="M10 10 L13 8 L10 5" fill="none"/>
+            </svg>
+          </button>
+          <button class="btn btn-danger btn-sm" id="new-btn" title="Neues Projekt starten (alle Daten löschen)">Neu</button>
+        </div>
+
+        <div class="toolbar-sep"></div>
+
+        <!-- PLZ + Calculate -->
+        <div class="toolbar-group plz-group">
+          <span class="toolbar-label">PLZ</span>
+          <input id="plz-input" type="text" maxlength="5" placeholder="12345"
+                 class="toolbar-input" autocomplete="off" spellcheck="false"/>
+          <span id="plz-status" class="plz-status"></span>
+        </div>
+
+        <div class="toolbar-group">
+          <button class="btn btn-primary" id="calc-btn" title="Heizlast berechnen (alle Räume)">
+            <svg class="tool-icon" viewBox="0 0 16 16" fill="currentColor">
+              <path d="M4 2 L13 8 L4 14 Z"/>
+            </svg>
+            Berechnen
+          </button>
+        </div>
+
+        <div class="toolbar-sep"></div>
+
+        <!-- File operations -->
+        <div class="toolbar-group">
+          <button class="btn" id="save-btn" title="Projekt als JSON exportieren">
+            <svg class="tool-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3">
+              <path d="M8 2 L8 10 M5 7 L8 10 L11 7"/>
+              <path d="M3 12 L3 14 L13 14 L13 12"/>
+            </svg>
+            JSON
+          </button>
+          <label class="btn" title="Projekt laden">
+            <svg class="tool-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3">
+              <path d="M8 10 L8 2 M5 5 L8 2 L11 5"/>
+              <path d="M3 12 L3 14 L13 14 L13 12"/>
+            </svg>
+            Laden
+            <input id="load-input" type="file" accept=".json,.heizlast.json" style="display:none"/>
+          </label>
+          <button class="btn" id="pdf-btn" title="PDF-Report herunterladen">
+            <svg class="tool-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3">
+              <rect x="3" y="1" width="8" height="11" rx="1"/>
+              <path d="M11 1 L13 3 L13 14 L5 14"/>
+              <line x1="5" y1="5" x2="9" y2="5"/>
+              <line x1="5" y1="7" x2="9" y2="7"/>
+              <line x1="5" y1="9" x2="7" y2="9"/>
+            </svg>
+            PDF
+          </button>
+        </div>
+
+        </div><!-- /toolbar-right -->
+      </div><!-- /toolbar -->
+
+      <!-- ══════════════════════════════ MAIN ══════════════════════════════ -->
+      <div id="main">
+
+        <!-- Left panel: library sub-panel + rooms sub-panel -->
+        <div id="leftpanel">
+          <div id="lib-subpanel" class="subpanel">
+            <div class="subpanel-header">Bibliothek</div>
+            <div id="leftpanel-scroll" class="subpanel-scroll">
+              <div id="leftpanel-content"></div>
+            </div>
+          </div>
+          <div class="subpanel-sep"></div>
+          <div id="rooms-subpanel" class="subpanel">
+            <div class="subpanel-header">Räume <span id="rooms-header-count"></span></div>
+            <div id="rooms-scroll" class="subpanel-scroll">
+              <div id="rooms-content"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Canvas area -->
+        <div id="canvas-container">
+          <canvas id="canvas"></canvas>
+          <div id="canvas-overlay">
+            <div class="shortcut-bar">
+              <kbd>Q</kbd> Auswahl &nbsp;
+              <kbd>W</kbd> Wand &nbsp;
+              <kbd>F</kbd> Fenster &nbsp;
+              <kbd>T</kbd> Tür &nbsp;
+              <kbd>G</kbd> Tor &nbsp;
+              <kbd>Esc</kbd> Abbruch &nbsp;
+              <kbd>Del</kbd> Löschen &nbsp;
+              <kbd>Ctrl+Z/Y</kbd> Undo/Redo
+            </div>
+          </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div id="sidebar">
+          <div id="sidebar-scroll">
+            <div id="sidebar-content"></div>
+          </div>
+        </div>
+
+      </div><!-- /main -->
+
+      <!-- ══════════════════════════════ RESULTS BENCH ══════════════════════════════ -->
+      <div id="results-bench" class="collapsed">
+        <div id="results-bench-bar">
+          <span class="rb-label">Heizlast</span>
+          <span id="rb-total">—</span>
+          <span id="rb-specific"></span>
+          <span id="rb-energy" class="rb-energy-badge"></span>
+          <div id="rb-roomstrip"></div>
+          <button id="rb-expand-btn" title="Ergebnisse ein/ausklappen">▾</button>
+        </div>
+        <div id="results-bench-detail"></div>
+      </div>
+
+      <!-- ══════════════════════════════ STATUS BAR ══════════════════════════════ -->
+      <div id="statusbar">
+        <span class="status-cell" id="status-scale">1 px = 10 mm</span>
+        <span class="status-cell" id="status-grid">Raster 50 mm</span>
+        <span class="status-cell" id="status-count">0 Wände · 0 Räume</span>
+        <span class="status-cell status-hint">
+          Mittlere Maustaste / Rechtsklick / Leertaste&nbsp;= Verschieben &nbsp;·&nbsp; Mausrad&nbsp;= Zoom
+        </span>
+      </div>
+
+    </div><!-- /app -->
+
+    <!-- ══════════════════════════════ ADD PRESET DIALOG ══════════════════════════════ -->
+    <dialog id="add-preset-dialog">
+      <div class="dialog-header">
+        <span id="dialog-title" class="dialog-title">Neuer Typ</span>
+        <button id="dialog-close" class="btn btn-sm" type="button">×</button>
+      </div>
+      <div id="dialog-fields"></div>
+      <div class="btn-row" style="margin-top:12px">
+        <button id="dialog-submit" class="btn btn-primary btn-sm" type="button">Hinzufügen</button>
+        <button id="dialog-cancel" class="btn btn-sm" type="button">Abbrechen</button>
+      </div>
+    </dialog>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

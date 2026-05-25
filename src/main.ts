@@ -1,0 +1,334 @@
+import './style.css';
+import { loadProject, saveProject, clearProject, exportProjectJSON, importProjectJSON } from './model/persistence.js';
+import { Editor } from './editor/editorState.js';
+import { renderFloor } from './editor/canvasRenderer.js';
+import { renderPropertyPanel } from './ui/propertyPanel.js';
+import { renderLibraryPanel } from './ui/libraryPanel.js';
+import { renderRoomPanel } from './ui/roomPanel.js';
+import { renderResultsBench } from './ui/resultsPanel.js';
+import { calculateHeizlast } from './calc/heizlast.js';
+import { exportPdf } from './ui/pdfExport.js';
+import { getDesignTemperature, validatePlz } from './climate/index.js';
+import type { Project, Room } from './model/types.js';
+import type { ToolMode } from './editor/editorState.js';
+
+const project = loadProject();
+const editor = new Editor(project);
+
+// ---- Canvas ----
+const canvas = document.getElementById('canvas') as HTMLCanvasElement;
+const ctx = canvas.getContext('2d')!;
+
+function resizeCanvas(): void {
+  const container = canvas.parentElement!;
+  const w = container.clientWidth;
+  const h = container.clientHeight;
+  if (w > 0 && h > 0) {
+    canvas.width = w;
+    canvas.height = h;
+  }
+  scheduleRender();
+}
+
+// ResizeObserver catches all container size changes (window resize, panel expand/collapse, etc.)
+new ResizeObserver(() => resizeCanvas()).observe(canvas.parentElement!);
+// Keep window listener as a fallback for browsers without ResizeObserver
+window.addEventListener('resize', resizeCanvas);
+
+// ---- Render ----
+let renderScheduled = false;
+
+function scheduleRender(): void {
+  if (renderScheduled) return;
+  renderScheduled = true;
+  requestAnimationFrame(doRender);
+}
+
+function doRender(): void {
+  renderScheduled = false;
+  if (canvas.width === 0 || canvas.height === 0) return;
+  const floor = editor.getProject().floors[0];
+  const state = editor.getState();
+  renderFloor(ctx, floor, state.viewport, editor.getRenderState(), canvas.width, canvas.height);
+}
+
+// View-only updates: canvas + cursor + status (no save, no DOM panel rebuild)
+editor.onRenderUpdate(() => {
+  scheduleRender();
+  updateCursor();
+  updateStatusBar();
+});
+
+// Full project changes: save + DOM rebuild
+editor.onChange(() => {
+  saveProject(editor.getProject() as Project);
+  scheduleRender();
+  updateCursor();
+  refreshSidebar();
+  refreshLeftPanel();
+  refreshRoomPanel();
+  refreshResultsBench();
+  updateStatusBar();
+});
+
+// ---- Left panel: library ----
+const leftPanelContent = document.getElementById('leftpanel-content')!;
+
+function refreshLeftPanel(): void {
+  renderLibraryPanel(leftPanelContent, editor);
+}
+refreshLeftPanel();
+
+// ---- Left panel: rooms ----
+const roomsContent      = document.getElementById('rooms-content')!;
+const roomsHeaderCount  = document.getElementById('rooms-header-count');
+
+function refreshRoomPanel(): void {
+  const floor = editor.getProject().floors[0];
+  if (roomsHeaderCount) roomsHeaderCount.textContent = `(${floor.rooms.length})`;
+  renderRoomPanel(roomsContent, floor);
+}
+refreshRoomPanel();
+
+// ---- Sidebar (property panel) ----
+const sidebarContent = document.getElementById('sidebar-content')!;
+
+function refreshSidebar(): void {
+  renderPropertyPanel(sidebarContent, editor);
+}
+refreshSidebar();
+
+// ---- Results bench ----
+const resultsBench   = document.getElementById('results-bench')!;
+const rbDetail       = document.getElementById('results-bench-detail')!;
+const rbTotal        = document.getElementById('rb-total')!;
+const rbSpecific     = document.getElementById('rb-specific')!;
+const rbStrip        = document.getElementById('rb-roomstrip')!;
+const rbExpandBtn    = document.getElementById('rb-expand-btn')!;
+
+rbExpandBtn.addEventListener('click', () => {
+  resultsBench.classList.toggle('collapsed');
+});
+
+function refreshResultsBench(): void {
+  const state = editor.getState();
+  if (state.heizlastResult) {
+    renderResultsBench(resultsBench, rbDetail, rbTotal, rbSpecific, rbStrip,
+      state.heizlastResult, editor.getProject() as Project, editor);
+  }
+}
+
+// ---- Toolbar tools ----
+function activateTool(tool: ToolMode): void {
+  editor.setTool(tool);
+  document.querySelectorAll('[data-tool]').forEach(b => b.classList.remove('active'));
+  document.querySelector(`[data-tool="${tool}"]`)?.classList.add('active');
+}
+
+document.querySelectorAll<HTMLButtonElement>('[data-tool]').forEach(btn => {
+  btn.addEventListener('click', () => activateTool(btn.dataset.tool as ToolMode));
+});
+
+// Undo / Redo
+document.getElementById('undo-btn')?.addEventListener('click', () => editor.undo());
+document.getElementById('redo-btn')?.addEventListener('click', () => editor.redo());
+
+// New project
+document.getElementById('new-btn')?.addEventListener('click', () => {
+  if (!confirm('Aktuelles Projekt verwerfen und neu beginnen?')) return;
+  clearProject();
+  editor.resetProject();
+  if (plzInput) plzInput.value = '';
+  updatePlzStatus('');
+  resultsBench.classList.add('collapsed');
+  activateTool('select');
+});
+
+// Dialog close / cancel
+const addPresetDialog = document.getElementById('add-preset-dialog') as HTMLDialogElement | null;
+document.getElementById('dialog-close')?.addEventListener('click',  () => addPresetDialog?.close());
+document.getElementById('dialog-cancel')?.addEventListener('click', () => addPresetDialog?.close());
+
+// Grid toggle
+const gridToggle = document.getElementById('grid-toggle') as HTMLButtonElement;
+gridToggle?.addEventListener('click', () => {
+  const v = !editor.getState().gridEnabled;
+  editor.setGridEnabled(v);
+  gridToggle.classList.toggle('active', v);
+});
+
+// PLZ input
+const plzInput = document.getElementById('plz-input') as HTMLInputElement;
+plzInput?.addEventListener('change', () => {
+  const plz = plzInput.value.trim();
+  editor.updateProject({ plz });
+  updatePlzStatus(plz);
+});
+
+function updatePlzStatus(plz: string): void {
+  const el = document.getElementById('plz-status');
+  if (!el) return;
+  if (!plz) { el.textContent = ''; el.className = 'plz-status'; return; }
+  if (!validatePlz(plz)) {
+    el.textContent = 'Ungültige PLZ'; el.className = 'plz-status error'; return;
+  }
+  const { temp, warning } = getDesignTemperature(plz);
+  el.textContent = `θe = ${temp} °C${warning ? ' ⚠' : ''}`;
+  el.className = `plz-status ${warning ? 'warn' : 'ok'}`;
+}
+
+if (plzInput) plzInput.value = project.plz;
+updatePlzStatus(project.plz);
+
+// Calculate
+document.getElementById('calc-btn')?.addEventListener('click', () => {
+  const proj = editor.getProject() as Project;
+  if (!proj.plz && proj.designTemperatureOverride === undefined) {
+    alert('Bitte PLZ eingeben oder Außentemperatur manuell setzen.');
+    return;
+  }
+  if (proj.floors[0].rooms.length === 0) {
+    alert('Keine geschlossenen Räume erkannt.\nBitte zuerst ein vollständiges Wandpolygon zeichnen.');
+    return;
+  }
+  const result = calculateHeizlast(proj);
+  editor.setHeizlastResult(result);
+  editor.setShowHeatMap(true);
+  for (const rr of result.rooms) {
+    editor.updateRoom(rr.roomId, { heizlastResult: rr.result } as Partial<Room>);
+  }
+  // Expand the bench to show results
+  resultsBench.classList.remove('collapsed');
+});
+
+// Heatmap toggle
+const hmToggle = document.getElementById('heatmap-toggle') as HTMLButtonElement;
+hmToggle?.addEventListener('click', () => {
+  const v = !editor.getState().showHeatMap;
+  editor.setShowHeatMap(v);
+  hmToggle.classList.toggle('active', v);
+});
+
+// PDF
+document.getElementById('pdf-btn')?.addEventListener('click', () => {
+  const state = editor.getState();
+  if (!state.heizlastResult) { alert('Bitte zuerst Heizlast berechnen.'); return; }
+  exportPdf(editor.getProject() as Project, state.heizlastResult);
+});
+
+// Save / Load
+document.getElementById('save-btn')?.addEventListener('click', () => {
+  exportProjectJSON(editor.getProject() as Project);
+});
+
+const loadInput = document.getElementById('load-input') as HTMLInputElement;
+loadInput?.addEventListener('change', async () => {
+  const file = loadInput.files?.[0];
+  if (!file) return;
+  try {
+    const proj = await importProjectJSON(file);
+    saveProject(proj);
+    location.reload();
+  } catch (e) {
+    alert(`Fehler beim Laden: ${e}`);
+  }
+});
+
+// Zoom
+document.getElementById('zoom-in')?.addEventListener('click', () =>
+  editor.handleWheel(canvas.width / 2, canvas.height / 2, -100));
+document.getElementById('zoom-out')?.addEventListener('click', () =>
+  editor.handleWheel(canvas.width / 2, canvas.height / 2, 100));
+document.getElementById('zoom-reset')?.addEventListener('click', () => {
+  editor.resetViewport(canvas.width, canvas.height);
+});
+
+// ---- Canvas events ----
+canvas.addEventListener('mousedown', e => {
+  e.preventDefault();
+  editor.handleMouseDown(e.offsetX, e.offsetY, e.button);
+  updateCursor();
+});
+
+canvas.addEventListener('mousemove', e => {
+  editor.handleMouseMove(e.offsetX, e.offsetY);
+  updateCursor();
+});
+
+canvas.addEventListener('mouseup', e => {
+  editor.handleMouseUp(e.offsetX, e.offsetY, e.button);
+  updateCursor();
+});
+
+canvas.addEventListener('mouseleave', () => {
+  editor.handleMouseUp(0, 0, 0);
+});
+
+canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  editor.handleWheel(e.offsetX, e.offsetY, e.deltaY);
+}, { passive: false });
+
+// ---- Keyboard ----
+window.addEventListener('keydown', e => {
+  if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement) return;
+
+  // Prevent browser scroll on space
+  if (e.key === ' ') e.preventDefault();
+
+  editor.handleKeyDown(e.key, e.ctrlKey || e.metaKey);
+
+  if (e.key === 'Delete' || e.key === 'Backspace') {
+    const s = editor.getState();
+    if (s.selectedWallId) editor.deleteSelectedWall();
+    else if (s.selectedOpeningId) editor.deleteSelectedOpening();
+  }
+
+  if (!e.ctrlKey && !e.metaKey) {
+    switch (e.key.toLowerCase()) {
+      case 'q': activateTool('select'); break;
+      case 'w': activateTool('wall'); break;
+      case 'f': activateTool('window'); break;
+      case 't': activateTool('door'); break;
+      case 'g': activateTool('garage_door'); break;
+    }
+  }
+  updateCursor();
+});
+
+window.addEventListener('keyup', e => {
+  editor.handleKeyUp(e.key);
+  updateCursor();
+});
+
+// ---- Cursor ----
+function updateCursor(): void {
+  canvas.style.cursor = editor.getCursor();
+}
+
+// ---- Status bar ----
+function updateStatusBar(): void {
+  const state = editor.getState();
+  const scaleEl = document.getElementById('status-scale');
+  if (scaleEl) {
+    const mmPerPx = Math.round(1 / state.viewport.scale);
+    scaleEl.textContent = `1 px = ${mmPerPx} mm`;
+  }
+  const gridEl = document.getElementById('status-grid');
+  if (gridEl) {
+    gridEl.textContent = state.gridEnabled ? `Raster ${state.gridSize} mm` : 'Raster aus';
+  }
+  const proj = editor.getProject();
+  const countEl = document.getElementById('status-count');
+  if (countEl) {
+    const f = proj.floors[0];
+    countEl.textContent = `${f.walls.length} Wände · ${f.rooms.length} Räume · ${f.openings.length} Öffnungen`;
+  }
+}
+
+// Initial setup
+activateTool('select');
+updateStatusBar();
+
