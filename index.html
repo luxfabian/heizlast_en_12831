@@ -108,14 +108,6 @@
 
         <div class="toolbar-sep"></div>
 
-        <!-- PLZ + Calculate -->
-        <div class="toolbar-group plz-group">
-          <span class="toolbar-label">PLZ</span>
-          <input id="plz-input" type="text" maxlength="5" placeholder="12345"
-                 class="toolbar-input" autocomplete="off" spellcheck="false"/>
-          <span id="plz-status" class="plz-status"></span>
-        </div>
-
         <div class="toolbar-group">
           <button class="btn btn-primary" id="calc-btn" title="Heizlast berechnen (alle Räume)">
             <svg class="tool-icon" viewBox="0 0 16 16" fill="currentColor">
@@ -162,8 +154,13 @@
       <!-- ══════════════════════════════ MAIN ══════════════════════════════ -->
       <div id="main">
 
-        <!-- Left panel: library sub-panel + rooms sub-panel -->
+        <!-- Left panel: project info + library + rooms sub-panels -->
         <div id="leftpanel">
+          <div id="project-subpanel" class="subpanel subpanel-fixed">
+            <div class="subpanel-header">Projekt</div>
+            <div id="project-content"></div>
+          </div>
+          <div class="subpanel-sep"></div>
           <div id="lib-subpanel" class="subpanel">
             <div class="subpanel-header">Bibliothek</div>
             <div id="leftpanel-scroll" class="subpanel-scroll">

@@ -5,10 +5,10 @@ import { renderFloor } from './editor/canvasRenderer.js';
 import { renderPropertyPanel } from './ui/propertyPanel.js';
 import { renderLibraryPanel } from './ui/libraryPanel.js';
 import { renderRoomPanel } from './ui/roomPanel.js';
+import { renderProjectPanel } from './ui/projectPanel.js';
 import { renderResultsBench } from './ui/resultsPanel.js';
 import { calculateHeizlast } from './calc/heizlast.js';
 import { exportPdf } from './ui/pdfExport.js';
-import { getDesignTemperature, validatePlz } from './climate/index.js';
 import type { Project, Room } from './model/types.js';
 import type { ToolMode } from './editor/editorState.js';
 
@@ -64,12 +64,21 @@ editor.onChange(() => {
   saveProject(editor.getProject() as Project);
   scheduleRender();
   updateCursor();
+  refreshProjectPanel();
   refreshSidebar();
   refreshLeftPanel();
   refreshRoomPanel();
   refreshResultsBench();
   updateStatusBar();
 });
+
+// ---- Left panel: project info ----
+const projectContent = document.getElementById('project-content')!;
+
+function refreshProjectPanel(): void {
+  renderProjectPanel(projectContent, editor.getProject() as Project, editor);
+}
+refreshProjectPanel();
 
 // ---- Left panel: library ----
 const leftPanelContent = document.getElementById('leftpanel-content')!;
@@ -138,8 +147,6 @@ document.getElementById('new-btn')?.addEventListener('click', () => {
   if (!confirm('Aktuelles Projekt verwerfen und neu beginnen?')) return;
   clearProject();
   editor.resetProject();
-  if (plzInput) plzInput.value = '';
-  updatePlzStatus('');
   resultsBench.classList.add('collapsed');
   activateTool('select');
 });
@@ -156,29 +163,6 @@ gridToggle?.addEventListener('click', () => {
   editor.setGridEnabled(v);
   gridToggle.classList.toggle('active', v);
 });
-
-// PLZ input
-const plzInput = document.getElementById('plz-input') as HTMLInputElement;
-plzInput?.addEventListener('change', () => {
-  const plz = plzInput.value.trim();
-  editor.updateProject({ plz });
-  updatePlzStatus(plz);
-});
-
-function updatePlzStatus(plz: string): void {
-  const el = document.getElementById('plz-status');
-  if (!el) return;
-  if (!plz) { el.textContent = ''; el.className = 'plz-status'; return; }
-  if (!validatePlz(plz)) {
-    el.textContent = 'Ungültige PLZ'; el.className = 'plz-status error'; return;
-  }
-  const { temp, warning } = getDesignTemperature(plz);
-  el.textContent = `θe = ${temp} °C${warning ? ' ⚠' : ''}`;
-  el.className = `plz-status ${warning ? 'warn' : 'ok'}`;
-}
-
-if (plzInput) plzInput.value = project.plz;
-updatePlzStatus(project.plz);
 
 // Calculate
 document.getElementById('calc-btn')?.addEventListener('click', () => {

@@ -43,8 +43,8 @@ export interface RenderState {
   tool: ToolMode;
 }
 
-function heatLoadColor(wPerM2: number): string {
-  const t = Math.min(1, wPerM2 / 150);
+/** t = 0..1 (normalized by max room loss) */
+export function heatLoadColor(t: number): string {
   const r = Math.round(10 + t * 200);
   const g = Math.round(60 - t * 40);
   const b = Math.round(160 - t * 140);
@@ -133,6 +133,9 @@ function getRoomPoly(room: Room, floor: Floor): Point2D[] | null {
 function drawRooms(ctx: CanvasRenderingContext2D, floor: Floor, vp: Viewport, state: RenderState): void {
   ctx.save();
   ctx.globalCompositeOperation = 'screen';
+  const maxLoss = state.showHeatMap && state.heizlastResult
+    ? Math.max(...state.heizlastResult.rooms.map(r => r.result.totalLoss), 1)
+    : 1;
   for (const room of floor.rooms) {
     const poly = getRoomPoly(room, floor);
     if (!poly) continue;
@@ -143,7 +146,7 @@ function drawRooms(ctx: CanvasRenderingContext2D, floor: Floor, vp: Viewport, st
     ctx.closePath();
     if (state.showHeatMap && state.heizlastResult) {
       const rr = state.heizlastResult.rooms.find(r => r.roomId === room.id);
-      ctx.fillStyle = rr && room.area ? heatLoadColor(rr.result.totalLoss / room.area) : ROOM_DEFAULT;
+      ctx.fillStyle = rr ? heatLoadColor(rr.result.totalLoss / maxLoss) : ROOM_DEFAULT;
     } else {
       ctx.fillStyle = room.id === state.selectedRoomId ? ROOM_SELECTED : ROOM_DEFAULT;
     }

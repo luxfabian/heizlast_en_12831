@@ -477,25 +477,6 @@ function renderWallPanel(container: HTMLElement, wall: WallSegment, editor: Edit
     sec.appendChild(field('Temp. Nachbargebäude (°C)', ntInp));
   }
 
-  // Fixed vertex checkboxes
-  const verSec = section('Endpunkte sperren');
-  container.appendChild(verSec);
-  const startRow = el('div', { class: 'constraint-row' });
-  const startCb  = el('input', { type: 'checkbox' }) as HTMLInputElement;
-  startCb.checked = !!wall.startFixed;
-  startCb.addEventListener('change', () => editor.updateWall(wall.id, { startFixed: startCb.checked }));
-  startRow.appendChild(startCb);
-  startRow.appendChild(el('label', {}, 'Startpunkt fixiert'));
-  verSec.appendChild(startRow);
-
-  const endRow = el('div', { class: 'constraint-row' });
-  const endCb  = el('input', { type: 'checkbox' }) as HTMLInputElement;
-  endCb.checked = !!wall.endFixed;
-  endCb.addEventListener('change', () => editor.updateWall(wall.id, { endFixed: endCb.checked }));
-  endRow.appendChild(endCb);
-  endRow.appendChild(el('label', {}, 'Endpunkt fixiert'));
-  verSec.appendChild(endRow);
-
   // Wall length display
   const { dist: _d } = { dist: Math.hypot(wall.end.x - wall.start.x, wall.end.y - wall.start.y) };
   const lenM = (_d / 1000).toFixed(3);

@@ -105,6 +105,7 @@ export interface Project {
   name: string;
   plz: string;
   designTemperatureOverride?: number;
+  groundTemperature?: number;  // °C, default 10 per DIN EN 12831
   floors: Floor[];
   hullGroups: HullGroup[];
   createdAt: string;
