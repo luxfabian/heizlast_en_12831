@@ -1,10 +1,11 @@
-import type { Floor, Room } from '../model/types.js';
+import type { Floor, Room, Project } from '../model/types.js';
 import type { Editor } from '../editor/editorState.js';
 import { getBoundaryCategoryLabel } from '../editor/adjacency.js';
 import { wallLength } from '../editor/geometry.js';
 
-// Track which rooms are EXPANDED (default = all collapsed)
-const expandedRooms = new Set<string>();
+// Persist expand/collapse state across re-renders
+const expandedRooms  = new Set<string>();
+const floorExpanded  = new Map<string, boolean>();
 
 // ---- DOM helper ----
 
@@ -20,17 +21,85 @@ function el<K extends keyof HTMLElementTagNameMap>(
 
 // ---- Main entry ----
 
-export function renderRoomPanel(container: HTMLElement, floor: Floor, editor?: Editor): void {
+export function renderRoomPanel(
+  container: HTMLElement,
+  project: Project,
+  activeFloorIndex: number,
+  editor?: Editor,
+): void {
   container.innerHTML = '';
-  const rooms = floor.rooms;
 
-  if (rooms.length === 0) {
-    container.appendChild(el('div', { class: 'room-empty' }, 'Noch keine Räume erkannt'));
-    return;
+  // Add floor button
+  if (editor) {
+    const addBtn = el('button', { class: 'btn btn-sm floor-add-btn' }, '+ Etage');
+    addBtn.addEventListener('click', () => editor.addFloor());
+    container.appendChild(addBtn);
   }
 
-  for (const room of rooms) {
-    container.appendChild(makeRoomEntry(room, floor, editor));
+  const floors    = project.floors;
+  const canRemove = floors.length > 1;
+
+  if (floors.length === 0) return;
+
+  for (let fi = 0; fi < floors.length; fi++) {
+    const floor    = floors[fi];
+    const isActive = fi === activeFloorIndex;
+
+    // Determine expansion state: use explicit choice if set, else default = active floor open
+    const isExpanded = floorExpanded.has(floor.id) ? floorExpanded.get(floor.id)! : isActive;
+
+    // ---- Floor section header ----
+    const header = el('div', { class: `floor-section-header${isActive ? ' active' : ''}` });
+
+    const toggleArrow = el('span', { class: 'floor-section-toggle' }, isExpanded ? '▾' : '▸');
+    header.appendChild(toggleArrow);
+
+    const label = el('span', { class: 'floor-section-label' }, floor.label);
+    header.appendChild(label);
+
+    let removeBtn: HTMLButtonElement | null = null;
+    if (canRemove && editor) {
+      removeBtn = el('button', { class: 'btn btn-xs floor-remove-btn', title: `Etage "${floor.label}" löschen` }, '×') as HTMLButtonElement;
+      removeBtn.addEventListener('click', e => {
+        e.stopPropagation();
+        if (confirm(`Etage "${floor.label}" und alle zugehörigen Räume löschen?`)) {
+          floorExpanded.delete(floor.id);
+          editor.removeFloor(floor.id);
+        }
+      });
+      header.appendChild(removeBtn);
+    }
+
+    // ---- Collapsible floor body ----
+    const floorBody = el('div', { class: 'floor-section-body' });
+    floorBody.style.display = isExpanded ? '' : 'none';
+
+    if (floor.rooms.length === 0) {
+      floorBody.appendChild(el('div', { class: 'room-empty' }, 'Noch keine Räume erkannt'));
+    } else {
+      for (const room of floor.rooms) {
+        floorBody.appendChild(makeRoomEntry(room, floor, editor));
+      }
+    }
+
+    // Click: activate floor (if not active) and expand; toggle expand if already active
+    header.addEventListener('click', e => {
+      if (removeBtn && (e.target === removeBtn || removeBtn.contains(e.target as Node))) return;
+      if (!isActive && editor) {
+        // Activate this floor — also expand it
+        floorExpanded.set(floor.id, true);
+        editor.setActiveFloor(fi);
+      } else {
+        // Toggle expansion of the active floor section
+        const nowExpanded = floorBody.style.display !== 'none';
+        floorExpanded.set(floor.id, !nowExpanded);
+        toggleArrow.textContent = !nowExpanded ? '▾' : '▸';
+        floorBody.style.display = !nowExpanded ? '' : 'none';
+      }
+    });
+
+    container.appendChild(header);
+    container.appendChild(floorBody);
   }
 }
 
@@ -96,7 +165,6 @@ function buildRoomBody(container: HTMLElement, room: Room, floor: Floor, editor?
     ));
     table.appendChild(thead);
 
-    // Build per-(type,category) counters for numbered labels
     const counters = new Map<string, number>();
     const count = (key: string) => { const n = (counters.get(key) ?? 0) + 1; counters.set(key, n); return n; };
 
@@ -135,7 +203,6 @@ function buildRoomBody(container: HTMLElement, room: Room, floor: Floor, editor?
     table.appendChild(tfoot);
 
   } else {
-    // Geometry-only view
     thead.appendChild(el('tr', {},
       el('th', {}, 'Element'),
       el('th', { class: 'num' }, 'm²'),

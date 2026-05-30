@@ -30,7 +30,11 @@ export function migrateProject(p: unknown): Project {
 
   if (!Array.isArray(proj.floors) || (proj.floors as unknown[]).length === 0) return createDefaultProject();
 
-  for (const f of proj.floors as Record<string, unknown>[]) {
+  for (let fi = 0; fi < (proj.floors as Record<string, unknown>[]).length; fi++) {
+    const f = (proj.floors as Record<string, unknown>[])[fi];
+    if (!f.id)                      f.id       = uuidv4();
+    if (f.level === undefined)      f.level    = fi;
+    if (!f.label)                   f.label    = fi === 0 ? 'EG' : `${fi}. OG`;
     if (!Array.isArray(f.walls))    f.walls    = [];
     if (!Array.isArray(f.openings)) f.openings = [];
     if (!Array.isArray(f.rooms))    f.rooms    = [];
@@ -58,6 +62,8 @@ export function migrateProject(p: unknown): Project {
       if (typeof r.designTemperature !== 'number') r.designTemperature = 20;
       if (typeof r.ceilingHeight     !== 'number') r.ceilingHeight     = 2500;
       if (!r.floorType) r.floorType = 'ground';
+      if (!Array.isArray(r.floors))   r.floors   = [];
+      if (!Array.isArray(r.ceilings)) r.ceilings = [];
     }
   }
 

@@ -10,9 +10,9 @@ const BOTTOM_MARGIN = 282;       // 15 mm footer reserve
 
 export function exportPdf(project: Project, result: HeizlastResult): void {
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
-  const floor = project.floors[0];
-  const roomMap = new Map(floor.rooms.map(r => [r.id, r]));
-  const totalArea = floor.rooms.reduce((s, r) => s + (r.area ?? 0), 0);
+  const allRooms = project.floors.flatMap(f => f.rooms);
+  const roomMap = new Map(allRooms.map(r => [r.id, r]));
+  const totalArea = allRooms.reduce((s, r) => s + (r.area ?? 0), 0);
   const date = new Date().toLocaleDateString('de-DE');
 
   let y = 0;

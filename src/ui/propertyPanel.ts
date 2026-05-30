@@ -6,7 +6,6 @@ import type { WallTypePreset, OpeningTypePreset } from '../library/presets.js';
 import { loadCustomPresets } from '../library/customPresets.js';
 import { v4 as uuidv4 } from '../utils/uuid.js';
 
-const BOUNDARY_CATS: BoundaryCategory[] = ['exterior', 'adj_heated', 'adj_reduced', 'ground', 'unheated', 'adj_neighbor'];
 
 // ---- Preset data for quick-size buttons ----
 const WINDOW_SIZE_PRESETS = [
@@ -64,8 +63,11 @@ function section(title: string): HTMLDivElement {
 
 export function renderPropertyPanel(container: HTMLElement, editor: Editor): void {
   container.innerHTML = '';
-  const state = editor.getState();
-  const floor = (editor.getProject() as import('../model/types.js').Project).floors[0];
+  const state  = editor.getState();
+  const _proj  = editor.getProject() as import('../model/types.js').Project;
+  const floor  = _proj.floors[state.activeFloorIndex] ?? _proj.floors[0];
+  const hasAbove = _proj.floors.some(f => f.level > floor.level);
+  const hasBelow = _proj.floors.some(f => f.level < floor.level);
 
   if (state.selectedOpeningId) {
     const op = floor.openings.find(o => o.id === state.selectedOpeningId);
@@ -77,7 +79,7 @@ export function renderPropertyPanel(container: HTMLElement, editor: Editor): voi
   }
   if (state.selectedRoomId) {
     const room = floor.rooms.find(r => r.id === state.selectedRoomId);
-    if (room) { renderRoomPanel(container, room, editor); return; }
+    if (room) { renderRoomPanel(container, room, editor, hasAbove, hasBelow); return; }
   }
 
   // Nothing selected — show hint
@@ -92,7 +94,7 @@ export function renderPropertyPanel(container: HTMLElement, editor: Editor): voi
 
 // ---- Room panel ----
 
-function renderRoomPanel(container: HTMLElement, room: Room, editor: Editor): void {
+function renderRoomPanel(container: HTMLElement, room: Room, editor: Editor, hasAbove: boolean, hasBelow: boolean): void {
   const sec = section('Raum');
   container.appendChild(sec);
 
@@ -108,7 +110,7 @@ function renderRoomPanel(container: HTMLElement, room: Room, editor: Editor): vo
   heightInp.addEventListener('change', () => editor.updateRoom(room.id, { ceilingHeight: Number(heightInp.value) }));
   sec.appendChild(field('Raumhöhe (mm)', heightInp));
 
-  renderFloorsSection(container, room, editor);
+  renderFloorsSection(container, room, editor, hasBelow);
 
   // Lüftung
   const airInp = numInput(room.minAirChanges ?? 0.5, 0, 5);
@@ -122,30 +124,32 @@ function renderRoomPanel(container: HTMLElement, room: Room, editor: Editor): vo
     sec.appendChild(info);
   }
 
-  renderCeilingsSection(container, room, editor);
+  renderCeilingsSection(container, room, editor, hasAbove);
 }
 
 // ---- Floors section ----
 
 const FLOOR_CATS: BoundaryCategory[] = ['ground', 'adj_heated', 'adj_reduced', 'unheated', 'exterior', 'adj_neighbor'];
 
-function renderFloorsSection(container: HTMLElement, room: Room, editor: Editor): void {
+function renderFloorsSection(container: HTMLElement, room: Room, editor: Editor, hasBelow: boolean): void {
   const floors = room.floors ?? [];
   const multi  = floors.length > 1;
 
   const secEl   = el('div', { class: 'panel-section' });
   const titleRow = el('div', { class: 'ceil-section-header' });
   titleRow.appendChild(el('span', { class: 'panel-section-title' }, 'Böden'));
-  const addBtn = el('button', { class: 'btn btn-sm', title: 'Bodenelement hinzufügen' }, '+ Boden');
-  addBtn.addEventListener('click', () => {
-    const newFloor: RoomFloor = { id: uuidv4(), uValue: 0.25, boundaryCategory: 'ground', typePresetId: 'floor_neubau' };
-    editor.updateRoom(room.id, { floors: [...floors, newFloor] });
-  });
-  titleRow.appendChild(addBtn);
+  if (!hasBelow) {
+    const addBtn = el('button', { class: 'btn btn-sm', title: 'Bodenelement hinzufügen' }, '+ Boden');
+    addBtn.addEventListener('click', () => {
+      const newFloor: RoomFloor = { id: uuidv4(), uValue: 0.25, boundaryCategory: 'ground', typePresetId: 'floor_neubau' };
+      editor.updateRoom(room.id, { floors: [...floors, newFloor] });
+    });
+    titleRow.appendChild(addBtn);
+  }
   secEl.appendChild(titleRow);
 
   for (let i = 0; i < floors.length; i++) {
-    secEl.appendChild(makeFloorCard(room, floors, i, multi, editor));
+    secEl.appendChild(makeFloorCard(room, floors, i, multi, editor, hasBelow));
   }
 
   if (multi) {
@@ -164,6 +168,7 @@ function makeFloorCard(
   index: number,
   multi: boolean,
   editor: Editor,
+  hasBelow: boolean,
 ): HTMLDivElement {
   const flr  = floors[index];
   const card = el('div', { class: 'ceil-card' });
@@ -180,7 +185,7 @@ function makeFloorCard(
   });
   cardHeader.appendChild(labelInp);
 
-  if (floors.length > 1) {
+  if (!hasBelow && floors.length > 1) {
     const removeBtn = el('button', { class: 'btn btn-sm btn-danger', title: 'Entfernen' }, '×');
     removeBtn.addEventListener('click', () => {
       const updated = floors.filter((_, i) => i !== index);
@@ -202,24 +207,13 @@ function makeFloorCard(
   presetSel.addEventListener('change', () => {
     const p = FLOOR_PRESETS.find(pr => pr.id === presetSel.value);
     if (!p) return;
-    const updated = floors.map((f, i) => i === index
-      ? { ...f, typePresetId: p.id, uValue: p.uValue, boundaryCategory: p.defaultCategory }
-      : f);
+    const patch = hasBelow
+      ? { typePresetId: p.id, uValue: p.uValue }
+      : { typePresetId: p.id, uValue: p.uValue, boundaryCategory: p.defaultCategory };
+    const updated = floors.map((f, i) => i === index ? { ...f, ...patch } : f);
     editor.updateRoom(room.id, { floors: updated });
   });
   card.appendChild(field('Bodenaufbau', presetSel));
-
-  const catSel = el('select', { class: 'input' }) as HTMLSelectElement;
-  for (const cat of FLOOR_CATS) {
-    const opt = el('option', { value: cat }, getBoundaryCategoryLabel(cat)) as HTMLOptionElement;
-    if (cat === flr.boundaryCategory) opt.selected = true;
-    catSel.appendChild(opt);
-  }
-  catSel.addEventListener('change', () => {
-    const updated = floors.map((f, i) => i === index ? { ...f, boundaryCategory: catSel.value as BoundaryCategory } : f);
-    editor.updateRoom(room.id, { floors: updated });
-  });
-  card.appendChild(field('Grenzkategorie', catSel));
 
   const uInp = el('input', { type: 'number', class: 'input', min: '0.05', max: '5', step: '0.01', value: String(flr.uValue) }) as HTMLInputElement;
   uInp.addEventListener('change', () => {
@@ -228,7 +222,40 @@ function makeFloorCard(
   });
   card.appendChild(field('U-Wert (W/m²K)', uInp));
 
-  if (multi) {
+  if (hasBelow) {
+    card.appendChild(el('div', { class: 'adj-auto-note' },
+      'Grenzkategorie wird automatisch aus der Etagengeometrie berechnet'));
+  } else {
+    const catSel = el('select', { class: 'input' }) as HTMLSelectElement;
+    for (const cat of FLOOR_CATS) {
+      const opt = el('option', { value: cat }, getBoundaryCategoryLabel(cat)) as HTMLOptionElement;
+      if (cat === flr.boundaryCategory) opt.selected = true;
+      catSel.appendChild(opt);
+    }
+    catSel.addEventListener('change', () => {
+      const updated = floors.map((f, i) => i === index ? { ...f, boundaryCategory: catSel.value as BoundaryCategory } : f);
+      editor.updateRoom(room.id, { floors: updated });
+    });
+    card.appendChild(field('Grenzkategorie', catSel));
+
+    if (flr.boundaryCategory === 'unheated' || flr.boundaryCategory === 'adj_reduced') {
+      const tInp = numInput(flr.unheatedSpaceTemp ?? 10, -20, 30);
+      tInp.addEventListener('change', () => {
+        const updated = floors.map((f, i) => i === index ? { ...f, unheatedSpaceTemp: Number(tInp.value) } : f);
+        editor.updateRoom(room.id, { floors: updated });
+      });
+      card.appendChild(field('Temp. darunter (°C)', tInp));
+    } else if (flr.boundaryCategory === 'adj_neighbor') {
+      const tInp = numInput(flr.unheatedSpaceTemp ?? 15, -20, 30);
+      tInp.addEventListener('change', () => {
+        const updated = floors.map((f, i) => i === index ? { ...f, unheatedSpaceTemp: Number(tInp.value) } : f);
+        editor.updateRoom(room.id, { floors: updated });
+      });
+      card.appendChild(field('Temp. Nachbar (°C)', tInp));
+    }
+  }
+
+  if (multi && !hasBelow) {
     const areaInp = numInput(flr.areaOverride ?? room.area ?? 0, 0, 10000);
     areaInp.step = '0.01';
     areaInp.addEventListener('change', () => {
@@ -238,22 +265,6 @@ function makeFloorCard(
     card.appendChild(field('Fläche (m²)', areaInp));
   }
 
-  if (flr.boundaryCategory === 'unheated' || flr.boundaryCategory === 'adj_reduced') {
-    const tInp = numInput(flr.unheatedSpaceTemp ?? 10, -20, 30);
-    tInp.addEventListener('change', () => {
-      const updated = floors.map((f, i) => i === index ? { ...f, unheatedSpaceTemp: Number(tInp.value) } : f);
-      editor.updateRoom(room.id, { floors: updated });
-    });
-    card.appendChild(field('Temp. darunter (°C)', tInp));
-  } else if (flr.boundaryCategory === 'adj_neighbor') {
-    const tInp = numInput(flr.unheatedSpaceTemp ?? 15, -20, 30);
-    tInp.addEventListener('change', () => {
-      const updated = floors.map((f, i) => i === index ? { ...f, unheatedSpaceTemp: Number(tInp.value) } : f);
-      editor.updateRoom(room.id, { floors: updated });
-    });
-    card.appendChild(field('Temp. Nachbar (°C)', tInp));
-  }
-
   return card;
 }
 
@@ -261,23 +272,25 @@ function makeFloorCard(
 
 const CEIL_CATS: BoundaryCategory[] = ['exterior', 'unheated', 'adj_heated', 'adj_reduced', 'adj_neighbor'];
 
-function renderCeilingsSection(container: HTMLElement, room: Room, editor: Editor): void {
+function renderCeilingsSection(container: HTMLElement, room: Room, editor: Editor, hasAbove: boolean): void {
   const ceilings = room.ceilings ?? [];
   const multi = ceilings.length > 1;
 
   const secEl = el('div', { class: 'panel-section' });
   const titleRow = el('div', { class: 'ceil-section-header' });
   titleRow.appendChild(el('span', { class: 'panel-section-title' }, 'Decken'));
-  const addBtn = el('button', { class: 'btn btn-sm', title: 'Decke hinzufügen' }, '+ Decke');
-  addBtn.addEventListener('click', () => {
-    const newCeil: RoomCeiling = { id: uuidv4(), uValue: 0.20, boundaryCategory: 'exterior', typePresetId: 'roof_neubau' };
-    editor.updateRoom(room.id, { ceilings: [...ceilings, newCeil] });
-  });
-  titleRow.appendChild(addBtn);
+  if (!hasAbove) {
+    const addBtn = el('button', { class: 'btn btn-sm', title: 'Decke hinzufügen' }, '+ Decke');
+    addBtn.addEventListener('click', () => {
+      const newCeil: RoomCeiling = { id: uuidv4(), uValue: 0.20, boundaryCategory: 'exterior', typePresetId: 'roof_neubau' };
+      editor.updateRoom(room.id, { ceilings: [...ceilings, newCeil] });
+    });
+    titleRow.appendChild(addBtn);
+  }
   secEl.appendChild(titleRow);
 
   for (let i = 0; i < ceilings.length; i++) {
-    secEl.appendChild(makeCeilingCard(room, ceilings, i, multi, editor));
+    secEl.appendChild(makeCeilingCard(room, ceilings, i, multi, editor, hasAbove));
   }
 
   // Volume override — show when multiple ceilings (irregular geometry)
@@ -303,6 +316,7 @@ function makeCeilingCard(
   index: number,
   multi: boolean,
   editor: Editor,
+  hasAbove: boolean,
 ): HTMLDivElement {
   const ceil = ceilings[index];
   const card = el('div', { class: 'ceil-card' });
@@ -320,7 +334,7 @@ function makeCeilingCard(
   });
   cardHeader.appendChild(labelInp);
 
-  if (ceilings.length > 1) {
+  if (!hasAbove && ceilings.length > 1) {
     const removeBtn = el('button', { class: 'btn btn-sm btn-danger', title: 'Entfernen' }, '×');
     removeBtn.addEventListener('click', () => {
       const updated = ceilings.filter((_, i) => i !== index);
@@ -332,7 +346,7 @@ function makeCeilingCard(
   }
   card.appendChild(cardHeader);
 
-  // Preset dropdown
+  // Preset dropdown — material only; never changes boundaryCategory when auto-detected
   const presetSel = el('select', { class: 'input' }) as HTMLSelectElement;
   presetSel.appendChild(el('option', { value: '' }, '— Benutzerdefiniert —'));
   for (const p of CEILING_PRESETS) {
@@ -343,25 +357,13 @@ function makeCeilingCard(
   presetSel.addEventListener('change', () => {
     const p = CEILING_PRESETS.find(pr => pr.id === presetSel.value);
     if (!p) return;
-    const updated = ceilings.map((c, i) => i === index
-      ? { ...c, typePresetId: p.id, uValue: p.uValue, boundaryCategory: p.defaultCategory }
-      : c);
+    const patch = hasAbove
+      ? { typePresetId: p.id, uValue: p.uValue }
+      : { typePresetId: p.id, uValue: p.uValue, boundaryCategory: p.defaultCategory };
+    const updated = ceilings.map((c, i) => i === index ? { ...c, ...patch } : c);
     editor.updateRoom(room.id, { ceilings: updated });
   });
   card.appendChild(field('Deckenaufbau', presetSel));
-
-  // Boundary category
-  const catSel = el('select', { class: 'input' }) as HTMLSelectElement;
-  for (const cat of CEIL_CATS) {
-    const opt = el('option', { value: cat }, getBoundaryCategoryLabel(cat)) as HTMLOptionElement;
-    if (cat === ceil.boundaryCategory) opt.selected = true;
-    catSel.appendChild(opt);
-  }
-  catSel.addEventListener('change', () => {
-    const updated = ceilings.map((c, i) => i === index ? { ...c, boundaryCategory: catSel.value as BoundaryCategory } : c);
-    editor.updateRoom(room.id, { ceilings: updated });
-  });
-  card.appendChild(field('Grenzkategorie', catSel));
 
   // U-value
   const uInp = el('input', { type: 'number', class: 'input', min: '0.05', max: '5', step: '0.01', value: String(ceil.uValue) }) as HTMLInputElement;
@@ -371,40 +373,58 @@ function makeCeilingCard(
   });
   card.appendChild(field('U-Wert (W/m²K)', uInp));
 
-  // Area override (always shown when multi, optional otherwise)
-  if (multi) {
-    const areaInp = numInput(ceil.areaOverride ?? room.area ?? 0, 0, 10000);
-    areaInp.step = '0.01';
-    areaInp.addEventListener('change', () => {
-      const updated = ceilings.map((c, i) => i === index ? { ...c, areaOverride: Number(areaInp.value) } : c);
+  if (hasAbove) {
+    card.appendChild(el('div', { class: 'adj-auto-note' },
+      'Grenzkategorie wird automatisch aus der Etagengeometrie berechnet'));
+  } else {
+    // Boundary category
+    const catSel = el('select', { class: 'input' }) as HTMLSelectElement;
+    for (const cat of CEIL_CATS) {
+      const opt = el('option', { value: cat }, getBoundaryCategoryLabel(cat)) as HTMLOptionElement;
+      if (cat === ceil.boundaryCategory) opt.selected = true;
+      catSel.appendChild(opt);
+    }
+    catSel.addEventListener('change', () => {
+      const updated = ceilings.map((c, i) => i === index ? { ...c, boundaryCategory: catSel.value as BoundaryCategory } : c);
       editor.updateRoom(room.id, { ceilings: updated });
     });
-    card.appendChild(field('Fläche (m²)', areaInp));
-  } else if (ceil.areaOverride !== undefined) {
-    const areaInp = numInput(ceil.areaOverride, 0, 10000);
-    areaInp.step = '0.01';
-    areaInp.addEventListener('change', () => {
-      const updated = ceilings.map((c, i) => i === index ? { ...c, areaOverride: Number(areaInp.value) || undefined } : c);
-      editor.updateRoom(room.id, { ceilings: updated });
-    });
-    card.appendChild(field('Fläche überschreiben (m²)', areaInp));
-  }
+    card.appendChild(field('Grenzkategorie', catSel));
 
-  // Temperature on opposing side
-  if (ceil.boundaryCategory === 'unheated' || ceil.boundaryCategory === 'adj_reduced') {
-    const tInp = numInput(ceil.unheatedSpaceTemp ?? 10, -20, 30);
-    tInp.addEventListener('change', () => {
-      const updated = ceilings.map((c, i) => i === index ? { ...c, unheatedSpaceTemp: Number(tInp.value) } : c);
-      editor.updateRoom(room.id, { ceilings: updated });
-    });
-    card.appendChild(field('Temp. darüber (°C)', tInp));
-  } else if (ceil.boundaryCategory === 'adj_neighbor') {
-    const tInp = numInput(ceil.unheatedSpaceTemp ?? 15, -20, 30);
-    tInp.addEventListener('change', () => {
-      const updated = ceilings.map((c, i) => i === index ? { ...c, unheatedSpaceTemp: Number(tInp.value) } : c);
-      editor.updateRoom(room.id, { ceilings: updated });
-    });
-    card.appendChild(field('Temp. Nachbar (°C)', tInp));
+    // Area override (always shown when multi, optional otherwise)
+    if (multi) {
+      const areaInp = numInput(ceil.areaOverride ?? room.area ?? 0, 0, 10000);
+      areaInp.step = '0.01';
+      areaInp.addEventListener('change', () => {
+        const updated = ceilings.map((c, i) => i === index ? { ...c, areaOverride: Number(areaInp.value) } : c);
+        editor.updateRoom(room.id, { ceilings: updated });
+      });
+      card.appendChild(field('Fläche (m²)', areaInp));
+    } else if (ceil.areaOverride !== undefined) {
+      const areaInp = numInput(ceil.areaOverride, 0, 10000);
+      areaInp.step = '0.01';
+      areaInp.addEventListener('change', () => {
+        const updated = ceilings.map((c, i) => i === index ? { ...c, areaOverride: Number(areaInp.value) || undefined } : c);
+        editor.updateRoom(room.id, { ceilings: updated });
+      });
+      card.appendChild(field('Fläche überschreiben (m²)', areaInp));
+    }
+
+    // Temperature on opposing side
+    if (ceil.boundaryCategory === 'unheated' || ceil.boundaryCategory === 'adj_reduced') {
+      const tInp = numInput(ceil.unheatedSpaceTemp ?? 10, -20, 30);
+      tInp.addEventListener('change', () => {
+        const updated = ceilings.map((c, i) => i === index ? { ...c, unheatedSpaceTemp: Number(tInp.value) } : c);
+        editor.updateRoom(room.id, { ceilings: updated });
+      });
+      card.appendChild(field('Temp. darüber (°C)', tInp));
+    } else if (ceil.boundaryCategory === 'adj_neighbor') {
+      const tInp = numInput(ceil.unheatedSpaceTemp ?? 15, -20, 30);
+      tInp.addEventListener('change', () => {
+        const updated = ceilings.map((c, i) => i === index ? { ...c, unheatedSpaceTemp: Number(tInp.value) } : c);
+        editor.updateRoom(room.id, { ceilings: updated });
+      });
+      card.appendChild(field('Temp. Nachbar (°C)', tInp));
+    }
   }
 
   return card;
@@ -412,14 +432,37 @@ function makeCeilingCard(
 
 // ---- Wall panel ----
 
+const EXTERIOR_CATS: BoundaryCategory[] = ['exterior', 'ground', 'unheated', 'adj_neighbor'];
+
 function renderWallPanel(container: HTMLElement, wall: WallSegment, editor: Editor, floor: import('../model/types.js').Floor): void {
-  // Adjacency banner
-  const banner = el('div', { class: 'adj-banner', style: `border-color: ${getBoundaryCategoryColor(wall.boundaryCategory)}` });
-  banner.innerHTML = `
-    <span class="adj-dot" style="background:${getBoundaryCategoryColor(wall.boundaryCategory)}"></span>
-    <strong>${getBoundaryCategoryLabel(wall.boundaryCategory)}</strong>
-    ${wall.adjacentRoomId ? `<span class="adj-sub">→ ${floor.rooms.find(r => r.id === wall.adjacentRoomId)?.label ?? '?'}</span>` : ''}
-  `;
+  const wallRooms = floor.rooms.filter(r => r.wallIds.includes(wall.id));
+  const isInterior = wallRooms.length >= 2;
+  const color = getBoundaryCategoryColor(wall.boundaryCategory);
+
+  // ── Adjacency banner ──
+  const banner = el('div', { class: 'adj-banner', style: `border-color: ${color}` });
+
+  const dot = el('span', { class: 'adj-dot', style: `background:${color}` });
+  banner.appendChild(dot);
+
+  const catStrong = el('strong', {}, getBoundaryCategoryLabel(wall.boundaryCategory));
+  banner.appendChild(catStrong);
+
+  if (isInterior) {
+    const [r1, r2] = wallRooms;
+    const sub = el('span', { class: 'adj-sub' });
+    sub.appendChild(el('span', { class: 'adj-room-chip' }, `${r1.label} (${r1.designTemperature} °C)`));
+    sub.appendChild(document.createTextNode(' ↔ '));
+    sub.appendChild(el('span', { class: 'adj-room-chip' }, `${r2.label} (${r2.designTemperature} °C)`));
+    banner.appendChild(sub);
+  } else if (wallRooms.length === 1) {
+    const sub = el('span', { class: 'adj-sub' });
+    sub.appendChild(el('span', { class: 'adj-room-chip' }, `${wallRooms[0].label} (${wallRooms[0].designTemperature} °C)`));
+    sub.appendChild(document.createTextNode(' → '));
+    sub.appendChild(document.createTextNode(getBoundaryCategoryLabel(wall.boundaryCategory)));
+    banner.appendChild(sub);
+  }
+
   container.appendChild(banner);
 
   const sec = section('Wand');
@@ -440,32 +483,37 @@ function renderWallPanel(container: HTMLElement, wall: WallSegment, editor: Edit
   presetSel.addEventListener('change', () => {
     const p = allWallPresets.find(pr => pr.id === presetSel.value);
     if (!p) return;
-    editor.updateWall(wall.id, { typePresetId: p.id, uValue: p.uValue, thickness: p.thickness, boundaryCategory: p.defaultCategory });
+    // Interior walls: boundaryCategory is managed by updateAdjacency, never overwritten here
+    const patch = isInterior
+      ? { typePresetId: p.id, uValue: p.uValue, thickness: p.thickness }
+      : { typePresetId: p.id, uValue: p.uValue, thickness: p.thickness, boundaryCategory: p.defaultCategory };
+    editor.updateWall(wall.id, patch);
   });
   sec.appendChild(field('Wandtyp', presetSel));
 
-  // Boundary category — grey out options that don't match the wall's topology
-  const roomsWithWall = floor.rooms.filter(r => r.wallIds.includes(wall.id));
-  const isInterior = roomsWithWall.length >= 2;
-  // Interior (shared) walls: adj_* categories only; exterior walls: exterior/ground/unheated/adj_neighbor
-  const INTERIOR_CATS: BoundaryCategory[] = ['adj_heated', 'adj_reduced', 'adj_neighbor'];
-  const EXTERIOR_CATS: BoundaryCategory[] = ['exterior', 'ground', 'unheated', 'adj_neighbor'];
-  const availableCats = isInterior ? INTERIOR_CATS : EXTERIOR_CATS;
-
-  const catSel = el('select', { class: 'input' }) as HTMLSelectElement;
-  for (const cat of BOUNDARY_CATS) {
-    const opt = el('option', { value: cat }, getBoundaryCategoryLabel(cat)) as HTMLOptionElement;
-    if (cat === wall.boundaryCategory) opt.selected = true;
-    if (!availableCats.includes(cat)) {
-      opt.disabled = true;
-      opt.style.color = '#4b5563';
+  // Boundary category — only relevant for exterior walls
+  if (!isInterior) {
+    const catSel = el('select', { class: 'input' }) as HTMLSelectElement;
+    for (const cat of EXTERIOR_CATS) {
+      const opt = el('option', { value: cat }, getBoundaryCategoryLabel(cat)) as HTMLOptionElement;
+      if (cat === wall.boundaryCategory) opt.selected = true;
+      catSel.appendChild(opt);
     }
-    catSel.appendChild(opt);
+    catSel.addEventListener('change', () =>
+      editor.updateWall(wall.id, { boundaryCategory: catSel.value as BoundaryCategory })
+    );
+    sec.appendChild(field('Grenzkategorie', catSel));
+
+    if (wall.boundaryCategory === 'unheated') {
+      const utInp = numInput(wall.unheatedSpaceTemp ?? 4, -20, 30);
+      utInp.addEventListener('change', () => editor.updateWall(wall.id, { unheatedSpaceTemp: Number(utInp.value) }));
+      sec.appendChild(field('Temp. unbeheizter Raum (°C)', utInp));
+    } else if (wall.boundaryCategory === 'adj_neighbor') {
+      const ntInp = numInput(wall.unheatedSpaceTemp ?? 15, -20, 30);
+      ntInp.addEventListener('change', () => editor.updateWall(wall.id, { unheatedSpaceTemp: Number(ntInp.value) }));
+      sec.appendChild(field('Temp. Nachbargebäude (°C)', ntInp));
+    }
   }
-  catSel.addEventListener('change', () =>
-    editor.updateWall(wall.id, { boundaryCategory: catSel.value as BoundaryCategory })
-  );
-  sec.appendChild(field('Grenzkategorie', catSel));
 
   // U-value
   const uInp = el('input', { type: 'number', class: 'input', min: '0.05', max: '5', step: '0.01', value: String(wall.uValue) }) as HTMLInputElement;
@@ -477,20 +525,8 @@ function renderWallPanel(container: HTMLElement, wall: WallSegment, editor: Edit
   thickInp.addEventListener('change', () => editor.updateWall(wall.id, { thickness: Number(thickInp.value) }));
   sec.appendChild(field('Wanddicke (mm)', thickInp));
 
-  // Unheated space temp / neighbor building temp
-  if (wall.boundaryCategory === 'unheated') {
-    const utInp = numInput(wall.unheatedSpaceTemp ?? 4, -20, 30);
-    utInp.addEventListener('change', () => editor.updateWall(wall.id, { unheatedSpaceTemp: Number(utInp.value) }));
-    sec.appendChild(field('Temp. unbeheizter Raum (°C)', utInp));
-  } else if (wall.boundaryCategory === 'adj_neighbor') {
-    const ntInp = numInput(wall.unheatedSpaceTemp ?? 15, -20, 30);
-    ntInp.addEventListener('change', () => editor.updateWall(wall.id, { unheatedSpaceTemp: Number(ntInp.value) }));
-    sec.appendChild(field('Temp. Nachbargebäude (°C)', ntInp));
-  }
-
-  // Wall length display
-  const { dist: _d } = { dist: Math.hypot(wall.end.x - wall.start.x, wall.end.y - wall.start.y) };
-  const lenM = (_d / 1000).toFixed(3);
+  // Length info
+  const lenM = (Math.hypot(wall.end.x - wall.start.x, wall.end.y - wall.start.y) / 1000).toFixed(3);
   container.appendChild(el('div', { class: 'panel-info' }, `Länge: ${lenM} m  ·  Fläche: ${(Number(lenM) * wall.thickness / 1000).toFixed(2)} m²`));
 
   // Delete button

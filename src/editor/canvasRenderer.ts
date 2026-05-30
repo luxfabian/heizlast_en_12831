@@ -58,17 +58,50 @@ export function renderFloor(
   state: RenderState,
   w: number,
   h: number,
+  ghostFloors?: Floor[],
 ): void {
   ctx.clearRect(0, 0, w, h);
   ctx.fillStyle = BG;
   ctx.fillRect(0, 0, w, h);
 
   if (state.gridEnabled) drawGrid(ctx, vp, w, h);
+
+  if (ghostFloors?.length) {
+    ctx.save();
+    ctx.globalAlpha = 0.18;
+    for (const gf of ghostFloors) drawWallsSimple(ctx, gf, vp);
+    ctx.restore();
+  }
+
   drawRooms(ctx, floor, vp, state);
   drawWallsAndOpenings(ctx, floor, vp, state);
   drawPreview(ctx, vp, state);
   drawRoomLabels(ctx, floor, vp, state);
   drawCursorCross(ctx, vp, state);
+}
+
+// ---- Ghost floor overlay ----
+
+function drawWallsSimple(ctx: CanvasRenderingContext2D, floor: Floor, vp: Viewport): void {
+  for (const wall of floor.walls) {
+    const cs = worldToCanvas(wall.start, vp);
+    const ce = worldToCanvas(wall.end,   vp);
+    const len = Math.hypot(wall.end.x - wall.start.x, wall.end.y - wall.start.y);
+    if (len < 1) continue;
+    const halfT = wall.thickness / 2 * vp.scale;
+    const lenPx = len * vp.scale;
+    const ang   = Math.atan2(ce.y - cs.y, ce.x - cs.x);
+    ctx.save();
+    ctx.translate(cs.x, cs.y);
+    ctx.rotate(ang);
+    ctx.fillStyle = WALL_FILL;
+    ctx.beginPath();
+    ctx.moveTo(0, -halfT); ctx.lineTo(lenPx, -halfT);
+    ctx.lineTo(lenPx, halfT); ctx.lineTo(0, halfT);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
 }
 
 // ---- Grid ----
@@ -440,18 +473,20 @@ function drawWallsAndOpenings(ctx: CanvasRenderingContext2D, floor: Floor, vp: V
       drawOpeningInWallSpace(ctx, g.op.type, g.x0, g.x1, thickPx, isSel);
     }
 
-    // Dimension label when selected/dragging
-    if (isSelected || isDragging) {
-      const lenM = (wallLenW / 1000).toFixed(2);
-      drawDimLabelLocal(ctx, wallLenPx / 2, -halfT - 12, `${lenM} m`);
-    }
-
     ctx.restore();
 
-    // Adjacency badge (only for selected walls)
-    if (isSelected && !isDragging) {
-      const mid = { x: (cs.x + ce.x) / 2, y: (cs.y + ce.y) / 2 };
-      drawAdjacencyBadge(ctx, mid.x, mid.y - halfT - 16, wall.boundaryCategory);
+    // Both labels drawn in canvas space so text is always horizontal and
+    // the two labels are always on opposite sides of the wall.
+    if (isSelected || isDragging) {
+      const midX = (cs.x + ce.x) / 2;
+      const midY = (cs.y + ce.y) / 2;
+      // Adjacency badge: above the wall midpoint in screen space
+      if (!isDragging) {
+        drawAdjacencyBadge(ctx, midX, midY - halfT - 14, wall.boundaryCategory);
+      }
+      // Dimension label: below the wall midpoint in screen space
+      const lenM = (wallLenW / 1000).toFixed(2);
+      drawDimLabelLocal(ctx, midX, midY + halfT + 12, `${lenM} m`);
     }
 
     // Endpoint drag handles
@@ -546,10 +581,10 @@ function drawAdjacencyBadge(ctx: CanvasRenderingContext2D, x: number, y: number,
   ctx.textAlign    = 'center';
   ctx.textBaseline = 'middle';
   const w = ctx.measureText(label).width + 8;
-  ctx.fillStyle   = 'rgba(15,17,23,0.85)';
+  ctx.fillStyle   = 'rgb(15,17,23)';
   ctx.fillRect(x - w / 2, y - 7, w, 14);
   ctx.strokeStyle = color;
-  ctx.lineWidth   = 1;
+  ctx.lineWidth   = 1.2;
   ctx.strokeRect(x - w / 2, y - 7, w, 14);
   ctx.fillStyle   = color;
   ctx.fillText(label, x, y);
@@ -564,7 +599,7 @@ function drawDimLabelLocal(ctx: CanvasRenderingContext2D, x: number, y: number, 
   ctx.textAlign     = 'center';
   ctx.textBaseline  = 'middle';
   const w = ctx.measureText(text).width + 8;
-  ctx.fillStyle   = 'rgba(15,17,23,0.85)';
+  ctx.fillStyle   = 'rgb(15,17,23)';
   ctx.fillRect(x - w / 2, y - 8, w, 16);
   ctx.strokeStyle = DIM_LINE;
   ctx.lineWidth   = 0.5;

@@ -22,6 +22,8 @@ export interface EditorState {
   gridSize: number;        // mm
   snapThreshold: number;   // mm
 
+  activeFloorIndex: number;
+
   // Active library presets
   activeWallPresetId: string;
   activeWindowPresetId: string;
@@ -62,6 +64,7 @@ export function createEditorState(): EditorState {
     gridEnabled: true,
     gridSize: 50,
     snapThreshold: 200,
+    activeFloorIndex: 0,
     activeWallPresetId:   DEFAULT_WALL_PRESET_ID,
     activeWindowPresetId: DEFAULT_WINDOW_PRESET_ID,
     activeDoorPresetId:   DEFAULT_DOOR_PRESET_ID,
@@ -97,7 +100,7 @@ export class Editor {
   getState(): Readonly<EditorState> { return this.state; }
   getProject(): Readonly<Project>   { return this.project; }
 
-  private get floor(): Floor { return this.project.floors[0]; }
+  private get floor(): Floor { return this.project.floors[this.state.activeFloorIndex] ?? this.project.floors[0]; }
 
   // ---- Snap ----
 
@@ -119,6 +122,11 @@ export class Editor {
     const ortho = drawStart ? this.autoOrthoSnap(worldPt, drawStart) : worldPt;
     const gridPt = this.state.gridEnabled ? snapPoint(ortho, this.state.gridSize) : ortho;
     return snapToExistingEndpoint(gridPt, this.floor.walls, this.state.snapThreshold);
+  }
+
+  private replaceActiveFloor(updated: Floor): Project {
+    const floors = this.project.floors.map((f, i) => i === this.state.activeFloorIndex ? updated : f);
+    return { ...this.project, floors };
   }
 
   // ---- Undo/Redo ----
@@ -148,7 +156,7 @@ export class Editor {
   private rebuildRooms(): void {
     const detected = detectRooms(this.floor.walls);
     const rooms = mergeDetectedRooms(detected, this.floor.rooms, this.floor.defaultCeilingHeight);
-    this.project = { ...this.project, floors: [updateAdjacency({ ...this.floor, rooms })] };
+    this.project = this.replaceActiveFloor(updateAdjacency({ ...this.floor, rooms }));
   }
 
   // ---- Pan ----
@@ -267,7 +275,7 @@ export class Editor {
         if (!patchStart && !patchEnd) return w;
         return { ...w, ...(patchStart ? { start: patchStart } : {}), ...(patchEnd ? { end: patchEnd } : {}) };
       });
-      this.project = { ...this.project, floors: [{ ...this.floor, walls: updatedWalls }] };
+      this.project = this.replaceActiveFloor({ ...this.floor, walls: updatedWalls });
       this.rebuildRooms();
       this.notify(); return;
     }
@@ -282,7 +290,7 @@ export class Editor {
         const wallLen = dist(wall.start, wall.end);
         const { t } = distPointToSegment(worldPt, wall.start, wall.end);
         const newPos = Math.max(0, Math.min(wallLen - op.width, t * wallLen - op.width / 2));
-        this.project = { ...this.project, floors: [{ ...this.floor, openings: this.floor.openings.map(o => o.id === openingId ? { ...o, positionAlongWall: newPos } : o) }] };
+        this.project = this.replaceActiveFloor({ ...this.floor, openings: this.floor.openings.map(o => o.id === openingId ? { ...o, positionAlongWall: newPos } : o) });
         this.notify();
       }
       return;
@@ -435,7 +443,7 @@ export class Editor {
       typePresetId: this.state.activeWallPresetId,
       boundaryCategory: preset?.defaultCategory ?? 'exterior',
     };
-    this.project = { ...this.project, floors: [{ ...this.floor, walls: [...this.floor.walls, newWall] }] };
+    this.project = this.replaceActiveFloor({ ...this.floor, walls: [...this.floor.walls, newWall] });
     this.rebuildRooms();
     this.state.drawStart = end; // chain-draw
     this.notify();
@@ -472,7 +480,7 @@ export class Editor {
       uValue:  defaultU,
       typePresetId: presetId,
     };
-    this.project = { ...this.project, floors: [{ ...this.floor, openings: [...this.floor.openings, opening] }] };
+    this.project = this.replaceActiveFloor({ ...this.floor, openings: [...this.floor.openings, opening] });
     this.state.tool = 'select';
     this.notify();
   }
@@ -513,7 +521,7 @@ export class Editor {
     if (!this.state.selectedWallId) return;
     this.pushUndo();
     const wallId = this.state.selectedWallId;
-    this.project = { ...this.project, floors: [{ ...this.floor, walls: this.floor.walls.filter(w => w.id !== wallId), openings: this.floor.openings.filter(o => o.wallId !== wallId) }] };
+    this.project = this.replaceActiveFloor({ ...this.floor, walls: this.floor.walls.filter(w => w.id !== wallId), openings: this.floor.openings.filter(o => o.wallId !== wallId) });
     this.rebuildRooms();
     this.state.selectedWallId = undefined;
     this.notify();
@@ -523,28 +531,32 @@ export class Editor {
     if (!this.state.selectedOpeningId) return;
     this.pushUndo();
     const id = this.state.selectedOpeningId;
-    this.project = { ...this.project, floors: [{ ...this.floor, openings: this.floor.openings.filter(o => o.id !== id) }] };
+    this.project = this.replaceActiveFloor({ ...this.floor, openings: this.floor.openings.filter(o => o.id !== id) });
     this.state.selectedOpeningId = undefined;
     this.notify();
   }
 
   updateWall(wallId: string, patch: Partial<WallSegment>): void {
     this.pushUndo();
-    this.project = { ...this.project, floors: [{ ...this.floor, walls: this.floor.walls.map(w => w.id === wallId ? { ...w, ...patch } : w) }] };
+    this.project = this.replaceActiveFloor({ ...this.floor, walls: this.floor.walls.map(w => w.id === wallId ? { ...w, ...patch } : w) });
     this.rebuildRooms();
     this.notify();
   }
 
   updateOpening(openingId: string, patch: Partial<Opening>): void {
     this.pushUndo();
-    this.project = { ...this.project, floors: [{ ...this.floor, openings: this.floor.openings.map(o => o.id === openingId ? { ...o, ...patch } : o) }] };
+    this.project = this.replaceActiveFloor({ ...this.floor, openings: this.floor.openings.map(o => o.id === openingId ? { ...o, ...patch } : o) });
     this.notify();
   }
 
   updateRoom(roomId: string, patch: Partial<Room>): void {
     this.pushUndo();
-    const updatedFloor = { ...this.floor, rooms: this.floor.rooms.map(r => r.id === roomId ? { ...r, ...patch } : r) };
-    this.project = { ...this.project, floors: [updateAdjacency(updatedFloor)] };
+    const floorIdx = this.project.floors.findIndex(f => f.rooms.some(r => r.id === roomId));
+    if (floorIdx === -1) return;
+    const targetFloor = this.project.floors[floorIdx];
+    const updatedFloor = updateAdjacency({ ...targetFloor, rooms: targetFloor.rooms.map(r => r.id === roomId ? { ...r, ...patch } : r) });
+    const floors = this.project.floors.map((f, i) => i === floorIdx ? updatedFloor : f);
+    this.project = { ...this.project, floors };
     this.notify();
   }
 
@@ -552,6 +564,57 @@ export class Editor {
 
   resetViewport(canvasW: number, canvasH: number): void {
     this.state.viewport = { offsetX: canvasW / 2, offsetY: canvasH / 2, scale: 0.1 };
+    this.notify();
+  }
+
+  addFloor(): void {
+    const maxLevel = Math.max(...this.project.floors.map(f => f.level));
+    const newIdx   = this.project.floors.length;
+    const newFloor: Floor = {
+      id: uuidv4(),
+      level: maxLevel + 1,
+      label: `${maxLevel + 1}. OG`,
+      defaultCeilingHeight: 2500,
+      walls: [],
+      openings: [],
+      rooms: [],
+    };
+    this.project = { ...this.project, floors: [...this.project.floors, newFloor] };
+    this.state.activeFloorIndex = newIdx;
+    this.state.selectedRoomId    = undefined;
+    this.state.selectedWallId    = undefined;
+    this.state.selectedOpeningId = undefined;
+    this.state.drawStart         = undefined;
+    this.notify();
+  }
+
+  removeFloor(floorId: string): void {
+    if (this.project.floors.length <= 1) return;
+    this.pushUndo();
+    const floors   = this.project.floors.filter(f => f.id !== floorId);
+    const newIndex = Math.min(this.state.activeFloorIndex, floors.length - 1);
+    this.project = { ...this.project, floors };
+    this.state.activeFloorIndex  = newIndex;
+    this.state.selectedRoomId    = undefined;
+    this.state.selectedWallId    = undefined;
+    this.state.selectedOpeningId = undefined;
+    this.state.drawStart         = undefined;
+    this.notify();
+  }
+
+  setActiveFloor(index: number): void {
+    if (index < 0 || index >= this.project.floors.length) return;
+    this.state.activeFloorIndex  = index;
+    this.state.selectedRoomId    = undefined;
+    this.state.selectedWallId    = undefined;
+    this.state.selectedOpeningId = undefined;
+    this.state.drawStart         = undefined;
+    this.notify();
+  }
+
+  renameFloor(floorId: string, label: string): void {
+    const floors = this.project.floors.map(f => f.id === floorId ? { ...f, label } : f);
+    this.project = { ...this.project, floors };
     this.notify();
   }
 

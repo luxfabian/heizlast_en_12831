@@ -47,9 +47,14 @@ function scheduleRender(): void {
 function doRender(): void {
   renderScheduled = false;
   if (canvas.width === 0 || canvas.height === 0) return;
-  const floor = editor.getProject().floors[0];
-  const state = editor.getState();
-  renderFloor(ctx, floor, state.viewport, editor.getRenderState(), canvas.width, canvas.height);
+  const state   = editor.getState();
+  const project = editor.getProject();
+  const activeIdx  = state.activeFloorIndex;
+  const floor      = project.floors[activeIdx] ?? project.floors[0];
+  const ghostFloors = project.floors.length > 1
+    ? project.floors.filter((_, i) => i !== activeIdx)
+    : undefined;
+  renderFloor(ctx, floor, state.viewport, editor.getRenderState(), canvas.width, canvas.height, ghostFloors);
 }
 
 // View-only updates: canvas + cursor + status (no save, no DOM panel rebuild)
@@ -68,6 +73,7 @@ editor.onChange(() => {
   refreshSidebar();
   refreshLeftPanel();
   refreshRoomPanel();
+  refreshFloorTabs();
   refreshResultsBench();
   updateStatusBar();
 });
@@ -93,11 +99,34 @@ const roomsContent      = document.getElementById('rooms-content')!;
 const roomsHeaderCount  = document.getElementById('rooms-header-count');
 
 function refreshRoomPanel(): void {
-  const floor = editor.getProject().floors[0];
-  if (roomsHeaderCount) roomsHeaderCount.textContent = `(${floor.rooms.length})`;
-  renderRoomPanel(roomsContent, floor, editor);
+  const proj       = editor.getProject() as Project;
+  const totalRooms = proj.floors.reduce((s, f) => s + f.rooms.length, 0);
+  if (roomsHeaderCount) roomsHeaderCount.textContent = `(${totalRooms})`;
+  renderRoomPanel(roomsContent, proj, editor.getState().activeFloorIndex, editor);
 }
 refreshRoomPanel();
+
+// ---- Floor tabs (canvas overlay) ----
+const floorTabs = document.getElementById('floor-tabs')!;
+
+function refreshFloorTabs(): void {
+  const floors    = editor.getProject().floors;
+  const activeIdx = editor.getState().activeFloorIndex;
+  if (floors.length <= 1) {
+    floorTabs.style.display = 'none';
+    return;
+  }
+  floorTabs.style.display = 'flex';
+  floorTabs.innerHTML = '';
+  floors.forEach((floor, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'floor-tab-btn' + (i === activeIdx ? ' active' : '');
+    btn.textContent = floor.label;
+    btn.addEventListener('click', () => editor.setActiveFloor(i));
+    floorTabs.appendChild(btn);
+  });
+}
+refreshFloorTabs();
 
 // ---- Sidebar (property panel) ----
 const sidebarContent = document.getElementById('sidebar-content')!;
@@ -343,8 +372,10 @@ function updateStatusBar(): void {
   const proj = editor.getProject();
   const countEl = document.getElementById('status-count');
   if (countEl) {
-    const f = proj.floors[0];
-    countEl.textContent = `${f.walls.length} Wände · ${f.rooms.length} Räume · ${f.openings.length} Öffnungen`;
+    const activeIdx = state.activeFloorIndex;
+    const f = proj.floors[activeIdx] ?? proj.floors[0];
+    const totalRooms = proj.floors.reduce((s, fl) => s + fl.rooms.length, 0);
+    countEl.textContent = `${f.walls.length} Wände · ${totalRooms} Räume · ${f.openings.length} Öffnungen`;
   }
 }
 

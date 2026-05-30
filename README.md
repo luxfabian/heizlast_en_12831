@@ -11,9 +11,10 @@ Browser-based heating load calculator following **DIN EN 12831** with a 2D CAD f
   - [1. Set project parameters](#1-set-project-parameters)
   - [2. Draw walls](#2-draw-walls)
   - [3. Add openings](#3-add-openings)
-  - [4. Set room properties](#4-set-room-properties)
-  - [5. Calculate](#5-calculate)
-  - [6. Export](#6-export)
+  - [4. Manage floors](#4-manage-floors)
+  - [5. Set room properties](#5-set-room-properties)
+  - [6. Calculate](#6-calculate)
+  - [7. Export](#7-export)
 - [Keyboard shortcuts](#keyboard-shortcuts)
 - [Project structure](#project-structure)
 - [Calculation overview](#calculation-overview)
@@ -78,33 +79,52 @@ Select the **Wand** tool (or press `W`) and click to place wall endpoints. Each 
 
 Select **Fenster** (`F`), **Tür** (`T`), or **Tor** (`G`) and click on an existing wall to place an opening at that position.
 
-### 4. Set room properties
+### 4. Manage floors
+
+A project starts with a single floor (EG). Use the **+ Etage** button in the Räume panel to add upper floors. Each floor has its own independent drawing canvas. The active floor is highlighted; other floors are shown as a ghost overlay at 18 % opacity for reference.
+
+- Floor tabs at the bottom of the canvas allow quick switching
+- Rename a floor by editing its label in the property panel
+- Remove a floor with the **×** button (requires at least two floors)
+
+**Inter-floor adjacency is computed automatically.** When two rooms on adjacent floors have overlapping footprints, the calculator determines the shared ceiling/floor area via polygon intersection (Sutherland–Hodgman) and uses each room's actual design temperatures to compute fij. No manual configuration is required.
+
+### 5. Set room properties
 
 Click inside a room with the **Auswahl** tool (`Q`) to open the property panel. Set:
 
 - Room name and design temperature
 - Ceiling height and minimum air change rate
-- Multiple floor surface elements (with optional area overrides for irregular geometry)
-- Multiple ceiling surface elements
+- Floor surface elements — preset (material/U-value) and boundary category
+- Ceiling surface elements — preset (material/U-value) and boundary category
 - Volume override for non-standard rooms
 
-Each wall can be assigned a **Grenzkategorie** (boundary category). Options are contextually filtered: interior walls (shared between two rooms) only show `Beheizt`, `Reduziert`, `Nachbargebäude`; exterior walls only show `Außenluft`, `Erdreich`, `Unbeheizt`, `Nachbargebäude`.
+**Boundary categories for walls** are contextually filtered:
 
-### 5. Calculate
+| Wall type | Available categories |
+|-----------|---------------------|
+| Interior (shared between two modelled rooms) | Auto-managed — fij is computed directly from the two room temperatures; no user input needed |
+| Exterior (building envelope) | `Außenluft`, `Erdreich`, `Unbeheizt`, `Nachbargebäude` |
+
+For `Unbeheizt` and `Nachbargebäude` a temperature field appears to specify the temperature on the other side.
+
+**Boundary categories for floors and ceilings** work the same way: when an adjacent floor exists in the project the category is auto-computed from the polygon intersection; otherwise the full dropdown is shown.
+
+### 6. Calculate
 
 Click **▶ Berechnen**. The results bench at the bottom expands and shows:
 
 - **Summary bar** — total heat load in kW, specific heat load (W/m²), energy class badge, and a colour-coded bar proportional to each room's absolute heat load
 - **Loss breakdown** — by category (Außenluft, Erdreich, Nachbargebäude, Lüftung) with proportional bars
-- **Room overview table** — area, Ti, ΦT, ΦV, ΦHL, W/m² per room; click a row to expand the element breakdown
+- **Room overview table** — rooms from all floors, area, Ti, ΦT, ΦV, ΦHL, W/m² per room; click a row to expand the element breakdown
 - **ΦHL(θe) chart** — heat load vs. outside temperature curve (design point marked in orange)
-- **Sankey chart** — flow diagram from loss category to room, balanced to the building design heat load
+- **Sankey chart** — flow diagram from loss category to room across all floors, balanced to the building design heat load
 
-> **Note on internal walls:** Internal heat transfers (adj_heated / adj_reduced walls between rooms at different temperatures) are excluded from the design heat load and the Sankey chart because they cancel within the building envelope.
+> **Note on internal surfaces:** Heat transfers through interior walls and inter-floor ceilings/floors between rooms at the same temperature (fij ≈ 0) contribute negligibly to the design heat load and appear with near-zero values in the element breakdown.
 
 The floor plan switches to a **heat map** view — room colours range from blue (low load) to red (high load), normalised to the highest-loaded room. Canvas labels show name, design temperature, heat load (W), and floor area (when sufficiently zoomed in).
 
-### 6. Export
+### 7. Export
 
 | Button | Action |
 |--------|--------|
@@ -134,7 +154,7 @@ The floor plan switches to a **heat map** view — room colours range from blue 
 src/
   calc/        # DIN EN 12831 calculation engine (pure functions, unit-tested)
   climate/     # PLZ → design temperature lookup (static JSON, DWD climate zones)
-  editor/      # Canvas engine, viewport, geometry, room detection (half-edge), adjacency
+  editor/      # Canvas engine, viewport, geometry, room detection (half-edge), wall adjacency, multi-floor ghost rendering
   library/     # Built-in and custom presets for walls, windows, doors, floors, ceilings
   materials/   # U-value database (static JSON)
   model/       # TypeScript data model, localStorage persistence, migration
@@ -157,11 +177,12 @@ Temperature correction factor fij by boundary category:
 | Category | fij |
 |----------|-----|
 | Außenluft | 1.0 |
-| Beheizt (adj_heated) | (Ti − Tadj) / (Ti − Te) |
-| Reduziert (adj_reduced) | (Ti − Tadj) / (Ti − Te) |
+| Interior wall / inter-floor surface (both rooms modelled) | (Ti − Tadj) / (Ti − Te) — Tadj from adjacent room's design temperature |
 | Erdreich | 0.45 (simplified) |
-| Unbeheizt | (Ti − Tu) / (Ti − Te) |
-| Nachbargebäude | (Ti − Tn) / (Ti − Te) |
+| Unbeheizt | (Ti − Tu) / (Ti − Te) — Tu user-specified |
+| Nachbargebäude | (Ti − Tn) / (Ti − Te) — Tn user-specified |
+
+**Inter-floor surfaces** are handled automatically: the shared area between rooms on adjacent floors is calculated via Sutherland–Hodgman polygon intersection (exact for convex rooms, approximate for concave). The resulting ceiling/floor surfaces are injected into the calculation as virtual elements; no manual floor/ceiling entries are needed for those portions.
 
 Wall areas are corrected for corner overlaps (internal face length = centreline length minus half-thickness of connecting walls at each vertex).
 
@@ -254,7 +275,7 @@ scp -r dist/* root@YOUR_SERVER_IP:/var/www/heizlast/
 
 ## Scope and limitations
 
-- **Single-storey buildings.** The data model is prepared for multi-floor extension.
+- **Multi-storey buildings are supported.** Inter-floor adjacency (ceiling/floor surfaces between storeys) is computed automatically from room polygon intersection. The Sutherland–Hodgman algorithm is exact for convex rooms; non-convex rooms are handled approximately.
 - **No thermal bridges (Wärmebrücken).** Noted in the PDF report footer.
 - No solar gains or internal gains.
 - Fully static — no backend, all data persisted in `localStorage`.

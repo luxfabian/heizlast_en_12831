@@ -893,8 +893,98 @@ h4 {
 #leftpanel-scroll { }
 
 /* ═══════════════════════════════════════════════════
-   ROOM PANEL — collapsible room entries
+   FLOOR TABS — canvas overlay
 ═══════════════════════════════════════════════════ */
+
+#floor-tabs {
+  position: absolute;
+  bottom: 40px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 2px;
+  background: rgba(15,17,23,0.88);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 3px;
+  z-index: 10;
+  backdrop-filter: blur(4px);
+}
+
+.floor-tab-btn {
+  height: 24px;
+  padding: 0 14px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  background: transparent;
+  color: var(--text-muted);
+  transition: all 0.1s;
+}
+.floor-tab-btn:hover  { background: var(--bg-elevated); color: var(--text); }
+.floor-tab-btn.active { background: var(--accent-glow); color: var(--accent); border-color: var(--accent); }
+
+/* ═══════════════════════════════════════════════════
+   ROOM PANEL — floor hierarchy + collapsible entries
+═══════════════════════════════════════════════════ */
+
+.floor-add-btn {
+  width: calc(100% - 16px);
+  margin: 6px 8px 4px;
+  justify-content: center;
+}
+
+.floor-section-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 8px;
+  margin-top: 6px;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border-light);
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.1s;
+}
+.floor-section-header:hover  { background: var(--bg-elevated); }
+.floor-section-header.active { background: var(--bg-active); }
+
+.floor-section-toggle {
+  font-size: 9px;
+  color: var(--text-dim);
+  flex-shrink: 0;
+  margin-right: 2px;
+}
+
+.floor-section-label {
+  flex: 1;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-dim);
+}
+.floor-section-header.active .floor-section-label { color: var(--cyan); }
+
+.floor-section-body {
+  /* no extra indent — rooms already have their own padding */
+}
+
+/* Subtle remove button — dark blue tones, not red */
+.floor-remove-btn {
+  color: var(--text-dim);
+  border-color: var(--border);
+  background: transparent;
+  opacity: 0.7;
+}
+.floor-remove-btn:hover {
+  color: var(--text-muted);
+  border-color: var(--text-dim);
+  background: var(--bg-elevated);
+  opacity: 1;
+}
 
 .room-empty, .room-no-calc {
   font-size: 11px;
@@ -1233,8 +1323,9 @@ h4 {
 
 .adj-banner {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 6px 8px;
   padding: 7px 10px;
   border: 1px solid var(--border);
   border-left-width: 3px;
@@ -1257,6 +1348,20 @@ h4 {
   font-size: 10px;
   font-weight: 400;
   color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+
+.adj-room-chip {
+  background: var(--bg-hover);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 1px 5px;
+  font-size: 10px;
+  color: var(--text);
+  white-space: nowrap;
 }
 
 
@@ -1265,6 +1370,18 @@ h4 {
   font-family: "Courier New", monospace;
   color: var(--text-dim);
   padding: 4px 0 2px;
+}
+
+/* ── Auto-adjacency info note ────────────────────── */
+.adj-auto-note {
+  font-size: 11px;
+  color: var(--cyan);
+  background: var(--cyan-glow);
+  border: 1px solid rgba(6,182,212,0.25);
+  border-radius: 4px;
+  padding: 5px 8px;
+  margin-top: 4px;
+  line-height: 1.4;
 }
 
 /* ── Ceiling section ─────────────────────────────── */

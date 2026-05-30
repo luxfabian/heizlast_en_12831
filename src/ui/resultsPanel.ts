@@ -94,8 +94,7 @@ function renderDetailPanel(
   editor: Editor,
 ): void {
   container.innerHTML = '';
-  const floor   = project.floors[0];
-  const roomMap = new Map(floor.rooms.map(r => [r.id, r]));
+  const roomMap = new Map(project.floors.flatMap(f => f.rooms).map(r => [r.id, r]));
 
   // Two-column layout: left = tables, right = chart
   const cols = el('div', { class: 'rb-detail-cols' });
@@ -411,8 +410,7 @@ export function renderSankey(container: HTMLElement, result: HeizlastResult, pro
   const total = result.designHeatLoad;
   if (total <= 0) return;
 
-  const floor   = project.floors[0];
-  const roomMap = new Map(floor.rooms.map(r => [r.id, r]));
+  const roomMap = new Map(project.floors.flatMap(f => f.rooms).map(r => [r.id, r]));
 
   // ── Category definitions ──────────────────────────────────────────────────
   interface CatDef { key: string; label: string; color: string; total: number }
