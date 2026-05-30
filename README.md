@@ -2,6 +2,31 @@
 
 Browser-based heating load calculator following **DIN EN 12831** with a 2D CAD floor plan editor. Draw rooms, assign materials, enter your postal code — and get a complete room-by-room heat load breakdown with charts and a printable PDF report.
 
+## Table of contents
+
+- [Requirements](#requirements)
+- [Getting started](#getting-started)
+- [Other commands](#other-commands)
+- [How to use](#how-to-use)
+  - [1. Set project parameters](#1-set-project-parameters)
+  - [2. Draw walls](#2-draw-walls)
+  - [3. Add openings](#3-add-openings)
+  - [4. Set room properties](#4-set-room-properties)
+  - [5. Calculate](#5-calculate)
+  - [6. Export](#6-export)
+- [Keyboard shortcuts](#keyboard-shortcuts)
+- [Project structure](#project-structure)
+- [Calculation overview](#calculation-overview)
+- [Test suite](#test-suite)
+- [Deploying to a server](#deploying-to-a-server)
+  - [1. Build the app locally](#1-build-the-app-locally)
+  - [2. Install nginx on the server](#2-install-nginx-on-the-server)
+  - [3. Copy the build to the server](#3-copy-the-build-to-the-server)
+  - [4. Configure nginx](#4-configure-nginx)
+  - [5. Add a domain and HTTPS](#5-add-a-domain-and-https-recommended)
+  - [Updating](#updating)
+- [Scope and limitations](#scope-and-limitations)
+
 ## Requirements
 
 - Node.js ≥ 18
@@ -149,6 +174,83 @@ src/
 ```
 
 Run with `npm test`.
+
+## Deploying to a server
+
+The app is fully static, so you only need a web server to host the built files. Below is a step-by-step guide for a fresh Ubuntu server (the same applies to any VPS from Hetzner, DigitalOcean, AWS, etc.).
+
+### 1. Build the app locally
+
+```bash
+npm run build
+# produces a dist/ folder
+```
+
+### 2. Install nginx on the server
+
+```bash
+ssh root@YOUR_SERVER_IP
+apt update && apt install nginx -y
+```
+
+Visiting `http://YOUR_SERVER_IP` should now show the nginx welcome page.
+
+### 3. Copy the build to the server
+
+Run this on your **local machine**:
+
+```bash
+ssh root@YOUR_SERVER_IP "mkdir -p /var/www/heizlast"
+scp -r dist/* root@YOUR_SERVER_IP:/var/www/heizlast/
+```
+
+### 4. Configure nginx
+
+On the server, create `/etc/nginx/sites-available/heizlast`:
+
+```nginx
+server {
+    listen 80;
+    server_name YOUR_SERVER_IP;
+
+    root /var/www/heizlast;
+    index index.html;
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}
+```
+
+Enable the config and reload:
+
+```bash
+ln -s /etc/nginx/sites-available/heizlast /etc/nginx/sites-enabled/
+nginx -t
+systemctl reload nginx
+```
+
+The app is now available at `http://YOUR_SERVER_IP`.
+
+### 5. Add a domain and HTTPS (recommended)
+
+Point an **A record** for your domain to the server IP at your domain registrar, then:
+
+```bash
+apt install certbot python3-certbot-nginx -y
+certbot --nginx -d your-domain.com
+```
+
+Certbot configures HTTPS automatically and renews the certificate for free via Let's Encrypt.
+
+### Updating
+
+Rebuild locally and re-copy — no server restart required:
+
+```bash
+npm run build
+scp -r dist/* root@YOUR_SERVER_IP:/var/www/heizlast/
+```
 
 ## Scope and limitations
 
