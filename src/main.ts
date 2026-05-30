@@ -6,7 +6,7 @@ import { renderPropertyPanel } from './ui/propertyPanel.js';
 import { renderLibraryPanel } from './ui/libraryPanel.js';
 import { renderRoomPanel } from './ui/roomPanel.js';
 import { renderProjectPanel } from './ui/projectPanel.js';
-import { renderResultsBench } from './ui/resultsPanel.js';
+import { renderResultsBench, renderSankey } from './ui/resultsPanel.js';
 import { calculateHeizlast } from './calc/heizlast.js';
 import { exportPdf } from './ui/pdfExport.js';
 import type { Project, Room } from './model/types.js';
@@ -124,8 +124,40 @@ function refreshResultsBench(): void {
   if (state.heizlastResult) {
     renderResultsBench(resultsBench, rbDetail, rbTotal, rbSpecific, rbStrip,
       state.heizlastResult, editor.getProject() as Project, editor);
+    // If Sankey tab is currently visible, refresh it too
+    if (sankeyView.style.display !== 'none') {
+      renderSankey(sankeyView, state.heizlastResult, editor.getProject() as Project);
+    }
   }
 }
+
+// ---- View tabs: Grundriss / Sankey ----
+const canvasContainer  = document.getElementById('canvas-container')!;
+const sankeyView       = document.getElementById('sankey-view')!;
+const viewPlanBtn      = document.getElementById('view-plan-btn')!;
+const viewSankeyBtn    = document.getElementById('view-sankey-btn')!;
+
+function activateView(view: 'plan' | 'sankey'): void {
+  if (view === 'sankey') {
+    canvasContainer.style.display = 'none';
+    sankeyView.style.display = 'flex';
+    viewPlanBtn.classList.remove('active');
+    viewSankeyBtn.classList.add('active');
+    const state = editor.getState();
+    if (state.heizlastResult) {
+      renderSankey(sankeyView, state.heizlastResult, editor.getProject() as Project);
+    }
+  } else {
+    sankeyView.style.display = 'none';
+    canvasContainer.style.display = '';
+    viewSankeyBtn.classList.remove('active');
+    viewPlanBtn.classList.add('active');
+    scheduleRender();
+  }
+}
+
+viewPlanBtn.addEventListener('click',   () => activateView('plan'));
+viewSankeyBtn.addEventListener('click', () => activateView('sankey'));
 
 // ---- Toolbar tools ----
 function activateTool(tool: ToolMode): void {
@@ -148,6 +180,8 @@ document.getElementById('new-btn')?.addEventListener('click', () => {
   clearProject();
   editor.resetProject();
   resultsBench.classList.add('collapsed');
+  viewSankeyBtn.setAttribute('disabled', '');
+  activateView('plan');
   activateTool('select');
 });
 
@@ -181,6 +215,8 @@ document.getElementById('calc-btn')?.addEventListener('click', () => {
   for (const rr of result.rooms) {
     editor.updateRoom(rr.roomId, { heizlastResult: rr.result } as Partial<Room>);
   }
+  // Enable Sankey tab now that results are available
+  viewSankeyBtn.removeAttribute('disabled');
   // Expand the bench to show results
   resultsBench.classList.remove('collapsed');
 });

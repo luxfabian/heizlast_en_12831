@@ -40,6 +40,14 @@
 
         <div class="toolbar-sep"></div>
 
+        <!-- View tabs: Plan / Sankey -->
+        <div class="toolbar-group">
+          <button class="btn btn-tab active" id="view-plan-btn" title="Grundriss (CAD-Ansicht)">Grundriss</button>
+          <button class="btn btn-tab" id="view-sankey-btn" title="Sankey-Diagramm der Heizlastverteilung" disabled>Sankey</button>
+        </div>
+
+        <div class="toolbar-sep"></div>
+
         <!-- View controls -->
         <div class="toolbar-group">
           <span class="toolbar-label">Ansicht</span>
@@ -176,7 +184,7 @@
           </div>
         </div>
 
-        <!-- Canvas area -->
+        <!-- Canvas area / Sankey view (mutually exclusive) -->
         <div id="canvas-container">
           <canvas id="canvas"></canvas>
           <div id="canvas-overlay">
@@ -192,6 +200,9 @@
             </div>
           </div>
         </div>
+
+        <!-- Sankey full view (shown instead of canvas when tab is active) -->
+        <div id="sankey-view" style="display:none"></div>
 
         <!-- Sidebar -->
         <div id="sidebar">

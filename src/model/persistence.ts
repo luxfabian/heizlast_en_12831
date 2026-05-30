@@ -24,7 +24,7 @@ export function loadProject(): Project {
 }
 
 /** Ensure any project loaded from storage (possibly old format) has all required fields */
-function migrateProject(p: unknown): Project {
+export function migrateProject(p: unknown): Project {
   if (!p || typeof p !== 'object') return createDefaultProject();
   const proj = p as Record<string, unknown>;
 

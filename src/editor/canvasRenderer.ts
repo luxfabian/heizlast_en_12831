@@ -669,24 +669,45 @@ function drawRoomLabels(ctx: CanvasRenderingContext2D, floor: Floor, vp: Viewpor
     const cp         = worldToCanvas(centroid, vp);
     const isSelected = room.id === state.selectedRoomId;
 
-    ctx.textAlign    = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.font      = `${isSelected ? 'bold ' : ''}12px "Inter", system-ui, sans-serif`;
-    ctx.fillStyle = isSelected ? ROOM_LABEL_SEL : ROOM_LABEL;
-    ctx.fillText(room.label, cp.x, cp.y - (state.heizlastResult ? 8 : 0));
+    const rr = state.heizlastResult?.rooms.find(r => r.roomId === room.id);
 
-    if (state.heizlastResult) {
-      const rr = state.heizlastResult.rooms.find(r => r.roomId === room.id);
-      if (rr) {
-        ctx.font      = '10px "Courier New", monospace';
-        ctx.fillStyle = HEAT_VALUE;
-        ctx.fillText(`${Math.round(rr.result.totalLoss)} W`, cp.x, cp.y + 9);
-      }
+    type LabelLine = { text: string; font: string; color: string };
+    const lines: LabelLine[] = [];
+
+    lines.push({
+      text:  room.label,
+      font:  `${isSelected ? 'bold ' : ''}12px "Inter", system-ui, sans-serif`,
+      color: isSelected ? ROOM_LABEL_SEL : ROOM_LABEL,
+    });
+    lines.push({
+      text:  `${room.designTemperature} °C`,
+      font:  '9px "Courier New", monospace',
+      color: 'rgba(148,163,184,0.7)',
+    });
+    if (rr) {
+      lines.push({
+        text:  `${Math.round(rr.result.totalLoss)} W`,
+        font:  '10px "Courier New", monospace',
+        color: HEAT_VALUE,
+      });
     }
     if (room.area && vp.scale > 0.04) {
-      ctx.font      = '9px system-ui';
-      ctx.fillStyle = 'rgba(148,163,184,0.6)';
-      ctx.fillText(`${room.area.toFixed(1)} m²`, cp.x, cp.y + (state.heizlastResult ? 22 : 14));
+      lines.push({
+        text:  `${room.area.toFixed(1)} m²`,
+        font:  '9px system-ui',
+        color: 'rgba(148,163,184,0.6)',
+      });
+    }
+
+    const LH = 11;
+    const totalH = (lines.length - 1) * LH;
+    const yStart = cp.y - totalH / 2;
+    ctx.textAlign    = 'center';
+    ctx.textBaseline = 'middle';
+    for (let i = 0; i < lines.length; i++) {
+      ctx.font      = lines[i].font;
+      ctx.fillStyle = lines[i].color;
+      ctx.fillText(lines[i].text, cp.x, yStart + i * LH);
     }
   }
 }

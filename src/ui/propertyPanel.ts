@@ -444,11 +444,22 @@ function renderWallPanel(container: HTMLElement, wall: WallSegment, editor: Edit
   });
   sec.appendChild(field('Wandtyp', presetSel));
 
-  // Boundary category
+  // Boundary category — grey out options that don't match the wall's topology
+  const roomsWithWall = floor.rooms.filter(r => r.wallIds.includes(wall.id));
+  const isInterior = roomsWithWall.length >= 2;
+  // Interior (shared) walls: adj_* categories only; exterior walls: exterior/ground/unheated/adj_neighbor
+  const INTERIOR_CATS: BoundaryCategory[] = ['adj_heated', 'adj_reduced', 'adj_neighbor'];
+  const EXTERIOR_CATS: BoundaryCategory[] = ['exterior', 'ground', 'unheated', 'adj_neighbor'];
+  const availableCats = isInterior ? INTERIOR_CATS : EXTERIOR_CATS;
+
   const catSel = el('select', { class: 'input' }) as HTMLSelectElement;
   for (const cat of BOUNDARY_CATS) {
     const opt = el('option', { value: cat }, getBoundaryCategoryLabel(cat)) as HTMLOptionElement;
     if (cat === wall.boundaryCategory) opt.selected = true;
+    if (!availableCats.includes(cat)) {
+      opt.disabled = true;
+      opt.style.color = '#4b5563';
+    }
     catSel.appendChild(opt);
   }
   catSel.addEventListener('change', () =>

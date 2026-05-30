@@ -397,6 +397,150 @@ function renderHullGroupEditor(
   container.appendChild(addBtn);
 }
 
+// ---- Sankey chart — heat load distribution ----
+//
+// Left nodes = loss categories (exterior, ground, adj_neighbor, ventilation).
+// Right nodes = rooms.
+// Ribbon width = category-portion flowing into each room.
+// The total flow on both sides equals designHeatLoad, so the Sankey is balanced.
+// Internal adj losses (adj_heated / adj_reduced) are excluded — they cancel within
+// the building and are not part of designHeatLoad.
+
+export function renderSankey(container: HTMLElement, result: HeizlastResult, project: Project): void {
+  container.innerHTML = '';
+  const total = result.designHeatLoad;
+  if (total <= 0) return;
+
+  const floor   = project.floors[0];
+  const roomMap = new Map(floor.rooms.map(r => [r.id, r]));
+
+  // ── Category definitions ──────────────────────────────────────────────────
+  interface CatDef { key: string; label: string; color: string; total: number }
+  const allCats: CatDef[] = [
+    { key: 'exterior', label: 'Außenluft / Unbeheizt', color: '#ef4444', total: result.lossByCategory.exterior },
+    { key: 'ground',   label: 'Erdreich',              color: '#f97316', total: result.lossByCategory.ground },
+    { key: 'neighbor', label: 'Nachbargebäude',        color: '#a855f7', total: result.lossByCategory.adjNeighbor },
+    { key: 'vent',     label: 'Lüftung',               color: '#06b6d4', total: result.lossByCategory.ventilation },
+  ];
+  const cats = allCats.filter(c => c.total > 0);
+
+  // ── Per-room category flows ───────────────────────────────────────────────
+  const getRoomFlow = (rr: HeizlastResult['rooms'][0], key: string): number => {
+    const eb = rr.result.elementBreakdown;
+    if (key === 'exterior')  return eb.filter(e => e.boundaryCategory === 'exterior' || e.boundaryCategory === 'unheated').reduce((s, e) => s + e.heatLoss, 0);
+    if (key === 'ground')    return eb.filter(e => e.boundaryCategory === 'ground').reduce((s, e) => s + e.heatLoss, 0);
+    if (key === 'neighbor')  return eb.filter(e => e.boundaryCategory === 'adj_neighbor').reduce((s, e) => s + e.heatLoss, 0);
+    return rr.result.ventilationLoss;
+  };
+
+  const rooms = result.rooms
+    .map(rr => ({
+      id:    rr.roomId,
+      label: roomMap.get(rr.roomId)?.label ?? rr.roomId,
+      flows: Object.fromEntries(cats.map(c => [c.key, getRoomFlow(rr, c.key)])),
+      total: cats.reduce((s, c) => s + getRoomFlow(rr, c.key), 0),
+    }))
+    .filter(r => r.total > 0);
+
+  if (!rooms.length || !cats.length) return;
+
+  // ── SVG layout constants ──────────────────────────────────────────────────
+  // viewBox sized for full-view rendering; SVG scales to fill container via CSS.
+  const W = 800, H = 500;
+  const YTOP = 60, YBOT = H - 60;
+  const AVAIL = YBOT - YTOP;
+  const GAP = 8;
+  const LX = 200, LW = 18;   // left node
+  const RX = 582, RW = 18;   // right node
+  const MX = (LX + LW + RX) / 2;
+
+  const leftTotalBar  = AVAIL - (cats.length  - 1) * GAP;
+  const rightTotalBar = AVAIL - (rooms.length - 1) * GAP;
+  const pxPerW = Math.min(leftTotalBar / total, rightTotalBar / total);
+  const nodeH  = (flow: number) => Math.max(3, flow * pxPerW);
+
+  interface NodePos { y: number; h: number }
+  let ly = YTOP;
+  const catPos: NodePos[]  = cats.map(c  => { const h = nodeH(c.total);  const p = { y: ly, h }; ly += h + GAP; return p; });
+  let ry = YTOP;
+  const roomPos: NodePos[] = rooms.map(r => { const h = nodeH(r.total);  const p = { y: ry, h }; ry += h + GAP; return p; });
+
+  // ── SVG builder ───────────────────────────────────────────────────────────
+  const ns = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(ns, 'svg');
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.setAttribute('class', 'sk-svg');
+  svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+
+  const s = (tag: string, attrs: Record<string, string>) => {
+    const e = document.createElementNS(ns, tag);
+    for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+    return e;
+  };
+  const txt = (x: number, y: number, anchor: string, content: string, cls: string) => {
+    const e = document.createElementNS(ns, 'text');
+    e.setAttribute('x', String(x)); e.setAttribute('y', String(y));
+    e.setAttribute('text-anchor', anchor); e.setAttribute('class', cls);
+    e.setAttribute('dominant-baseline', 'middle');
+    e.textContent = content;
+    return e;
+  };
+
+  // ── Ribbons ───────────────────────────────────────────────────────────────
+  const catOff  = catPos.map(() => 0);
+  const roomOff = roomPos.map(() => 0);
+
+  for (let ci = 0; ci < cats.length; ci++) {
+    for (let ri = 0; ri < rooms.length; ri++) {
+      const flow = rooms[ri].flows[cats[ci].key] ?? 0;
+      if (flow < 0.5) continue;
+      const fh = Math.max(1, flow * pxPerW);
+
+      const y0t = catPos[ci].y  + catOff[ci];
+      const y1t = roomPos[ri].y + roomOff[ri];
+
+      catOff[ci]  += fh;
+      roomOff[ri] += fh;
+
+      const d = [
+        `M ${LX + LW} ${y0t}`,
+        `C ${MX} ${y0t} ${MX} ${y1t} ${RX} ${y1t}`,
+        `L ${RX} ${y1t + fh}`,
+        `C ${MX} ${y1t + fh} ${MX} ${y0t + fh} ${LX + LW} ${y0t + fh} Z`,
+      ].join(' ');
+      svg.appendChild(s('path', { d, fill: cats[ci].color, opacity: '0.25' }));
+    }
+  }
+
+  // ── Left nodes + labels ───────────────────────────────────────────────────
+  for (let ci = 0; ci < cats.length; ci++) {
+    const { y, h } = catPos[ci];
+    svg.appendChild(s('rect', { x: String(LX), y: String(y), width: String(LW), height: String(h), fill: cats[ci].color, rx: '2' }));
+    const mid = y + h / 2;
+    svg.appendChild(txt(LX - 10, mid - 6,  'end', cats[ci].label,                    'sk-label'));
+    svg.appendChild(txt(LX - 10, mid + 8,  'end', `${Math.round(cats[ci].total)} W`, 'sk-value'));
+    svg.appendChild(txt(LX - 10, mid + 20, 'end', `${(cats[ci].total / total * 100).toFixed(0)} %`, 'sk-pct'));
+  }
+
+  // ── Right nodes + labels ──────────────────────────────────────────────────
+  for (let ri = 0; ri < rooms.length; ri++) {
+    const { y, h } = roomPos[ri];
+    svg.appendChild(s('rect', { x: String(RX), y: String(y), width: String(RW), height: String(h), fill: '#3b82f6', rx: '2' }));
+    const mid = y + h / 2;
+    svg.appendChild(txt(RX + RW + 10, mid - 6,  'start', rooms[ri].label,                    'sk-label'));
+    svg.appendChild(txt(RX + RW + 10, mid + 8,  'start', `${Math.round(rooms[ri].total)} W`, 'sk-value'));
+    svg.appendChild(txt(RX + RW + 10, mid + 20, 'start', `${(rooms[ri].total / total * 100).toFixed(0)} %`, 'sk-pct'));
+  }
+
+  // ── Title + subtitle ──────────────────────────────────────────────────────
+  svg.appendChild(txt(W / 2, 22, 'middle', 'Heizlastverteilung', 'sk-title'));
+  svg.appendChild(txt(W / 2, 38, 'middle',
+    `Gesamtheizlast ΦHL = ${(total / 1000).toFixed(2)} kW  ·  Normaussentemperatur θe = ${result.designTemperature} °C`,
+    'sk-subtitle'));
+
+  container.appendChild(svg);
+}
+
 // Kept for backwards compat — no longer called but exported in case external code references it
 export function renderResultsPanel(
   container: HTMLElement,

@@ -62,8 +62,8 @@ export function updateAdjacency(floor: Floor): Floor {
 export function getBoundaryCategoryLabel(cat: BoundaryCategory): string {
   switch (cat) {
     case 'exterior':      return 'Außenluft';
-    case 'adj_heated':    return 'Beheizt (Nachbar)';
-    case 'adj_reduced':   return 'Reduziert (Nachbar)';
+    case 'adj_heated':    return 'Beheizt';
+    case 'adj_reduced':   return 'Reduziert';
     case 'ground':        return 'Erdreich';
     case 'unheated':      return 'Unbeheizt';
     case 'adj_neighbor':  return 'Nachbargebäude';
