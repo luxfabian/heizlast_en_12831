@@ -567,7 +567,7 @@ function renderLibraryItemPanel(
     const customP = custom.walls.find(p => p.id === id);
     const preset  = customP ?? builtin;
     if (!preset) return;
-    const isCustom = !!customP;
+    void customP; // isCustom no longer needed — save always uses original ID
 
     const sec = section('Wandtyp');
     container.appendChild(sec);
@@ -587,19 +587,20 @@ function renderLibraryItemPanel(
     sec.appendChild(field('Dicke (mm)', thkInp));
     sec.appendChild(field('Grenzkategorie', catSel));
 
-    const saveBtn = el('button', { class: 'btn btn-primary btn-sm', style: 'margin-top:8px' },
-      isCustom ? 'Speichern' : 'Als eigenen Typ speichern');
+    const saveBtn = el('button', { class: 'btn btn-primary btn-sm', style: 'margin-top:8px' }, 'Speichern');
     saveBtn.addEventListener('click', () => {
-      const newId = isCustom ? id : `custom_${uuidv4().slice(0, 8)}`;
+      const uVal = Number(uInp.value);
+      const thk  = Number(thkInp.value);
       const p: WallTypePreset = {
-        id: newId, name: nameInp.value.trim() || preset.name,
+        id, name: nameInp.value.trim() || preset.name,
         description: nameInp.value.trim() || preset.name,
-        uValue: Number(uInp.value), thickness: Number(thkInp.value),
+        uValue: uVal, thickness: thk,
         defaultCategory: catSel.value as BoundaryCategory,
       };
       addCustomWallPreset(p);
-      editor.setActiveWallPreset(newId);
-      editor.selectLibraryItem(newId, 'wall');
+      editor.syncPresetToProject(id, uVal, thk);
+      editor.setActiveWallPreset(id);
+      editor.selectLibraryItem(id, 'wall');
     });
     container.appendChild(saveBtn);
 
@@ -608,7 +609,7 @@ function renderLibraryItemPanel(
     const customP = custom.floors.find(p => p.id === id);
     const preset  = customP ?? builtin;
     if (!preset) return;
-    const isCustom = !!customP;
+    void customP; // isCustom no longer needed — save always uses original ID
 
     const sec = section('Bodenaufbau');
     container.appendChild(sec);
@@ -626,16 +627,16 @@ function renderLibraryItemPanel(
     sec.appendChild(field('U-Wert (W/m²K)', uInp));
     sec.appendChild(field('Grenzkategorie', catSel));
 
-    const saveBtn = el('button', { class: 'btn btn-primary btn-sm', style: 'margin-top:8px' },
-      isCustom ? 'Speichern' : 'Als eigenen Typ speichern');
+    const saveBtn = el('button', { class: 'btn btn-primary btn-sm', style: 'margin-top:8px' }, 'Speichern');
     saveBtn.addEventListener('click', () => {
-      const newId = isCustom ? id : `custom_${uuidv4().slice(0, 8)}`;
+      const uVal = Number(uInp.value);
       const p: CeilingTypePreset = {
-        id: newId, name: nameInp.value.trim() || preset.name,
-        uValue: Number(uInp.value), defaultCategory: catSel.value as BoundaryCategory,
+        id, name: nameInp.value.trim() || preset.name,
+        uValue: uVal, defaultCategory: catSel.value as BoundaryCategory,
       };
       addCustomFloorPreset(p);
-      editor.selectLibraryItem(newId, 'floor');
+      editor.syncPresetToProject(id, uVal);
+      editor.selectLibraryItem(id, 'floor');
     });
     container.appendChild(saveBtn);
 
@@ -647,7 +648,7 @@ function renderLibraryItemPanel(
     const customP  = customList.find(p => p.id === id);
     const preset   = customP ?? builtin;
     if (!preset) return;
-    const isCustom = !!customP;
+    void customP; // isCustom no longer needed — save always uses original ID
 
     const typeLabel = type === 'window' ? 'Fenster' : type === 'door' ? 'Tür' : 'Garagentor';
     const sec = section(typeLabel + 'typ');
@@ -663,20 +664,20 @@ function renderLibraryItemPanel(
     sec.appendChild(field('Breite (mm)', widthInp));
     sec.appendChild(field('Höhe (mm)', heightInp));
 
-    const saveBtn = el('button', { class: 'btn btn-primary btn-sm', style: 'margin-top:8px' },
-      isCustom ? 'Speichern' : 'Als eigenen Typ speichern');
+    const saveBtn = el('button', { class: 'btn btn-primary btn-sm', style: 'margin-top:8px' }, 'Speichern');
     saveBtn.addEventListener('click', () => {
-      const newId = isCustom ? id : `custom_${uuidv4().slice(0, 8)}`;
+      const uVal = Number(uInp.value);
       const p: OpeningTypePreset = {
-        id: newId, name: nameInp.value.trim() || preset.name,
+        id, name: nameInp.value.trim() || preset.name,
         type: preset.type,
-        uValue: Number(uInp.value),
+        uValue: uVal,
         width:  Number(widthInp.value),
         height: Number(heightInp.value),
       };
       addCustomOpeningPreset(p);
-      editor.setActiveOpeningPreset(preset.type, newId);
-      editor.selectLibraryItem(newId, preset.type);
+      editor.syncPresetToProject(id, uVal);
+      editor.setActiveOpeningPreset(preset.type, id);
+      editor.selectLibraryItem(id, preset.type);
     });
     container.appendChild(saveBtn);
   }
@@ -768,9 +769,12 @@ function renderWallPanel(container: HTMLElement, wall: WallSegment, editor: Edit
     presetSel.appendChild(opt);
   }
   presetSel.addEventListener('change', () => {
+    if (presetSel.value === '') {
+      editor.updateWall(wall.id, { typePresetId: undefined });
+      return;
+    }
     const p = allWallPresets.find(pr => pr.id === presetSel.value);
     if (!p) return;
-    // Interior walls: boundaryCategory is managed by updateAdjacency, never overwritten here
     const patch = isInterior
       ? { typePresetId: p.id, uValue: p.uValue, thickness: p.thickness }
       : { typePresetId: p.id, uValue: p.uValue, thickness: p.thickness, boundaryCategory: p.defaultCategory };
@@ -802,15 +806,19 @@ function renderWallPanel(container: HTMLElement, wall: WallSegment, editor: Edit
     }
   }
 
-  // U-value
-  const uInp = el('input', { type: 'number', class: 'input', min: '0.05', max: '5', step: '0.01', value: String(wall.uValue) }) as HTMLInputElement;
-  uInp.addEventListener('change', () => editor.updateWall(wall.id, { uValue: Number(uInp.value) }));
-  sec.appendChild(field('U-Wert Wand (W/m²K)', uInp));
+  // U-value and thickness — read-only when a preset is selected
+  if (wall.typePresetId) {
+    sec.appendChild(el('div', { class: 'panel-info' },
+      `U = ${wall.uValue.toFixed(2)} W/m²K  ·  ${wall.thickness} mm`));
+  } else {
+    const uInp = el('input', { type: 'number', class: 'input', min: '0.05', max: '5', step: '0.01', value: String(wall.uValue) }) as HTMLInputElement;
+    uInp.addEventListener('change', () => editor.updateWall(wall.id, { uValue: Number(uInp.value) }));
+    sec.appendChild(field('U-Wert (W/m²K)', uInp));
 
-  // Thickness
-  const thickInp = numInput(wall.thickness, 50, 1000);
-  thickInp.addEventListener('change', () => editor.updateWall(wall.id, { thickness: Number(thickInp.value) }));
-  sec.appendChild(field('Wanddicke (mm)', thickInp));
+    const thickInp = numInput(wall.thickness, 50, 1000);
+    thickInp.addEventListener('change', () => editor.updateWall(wall.id, { thickness: Number(thickInp.value) }));
+    sec.appendChild(field('Wanddicke (mm)', thickInp));
+  }
 
   // Length info
   const lenM = (Math.hypot(wall.end.x - wall.start.x, wall.end.y - wall.start.y) / 1000).toFixed(3);
@@ -844,6 +852,10 @@ function renderOpeningPanel(container: HTMLElement, op: Opening, editor: Editor)
     opPresetSel.appendChild(opt);
   }
   opPresetSel.addEventListener('change', () => {
+    if (opPresetSel.value === '') {
+      editor.updateOpening(op.id, { typePresetId: undefined });
+      return;
+    }
     const p = allOpeningPresets.find(pr => pr.id === opPresetSel.value);
     if (!p) return;
     editor.updateOpening(op.id, { typePresetId: p.id, uValue: p.uValue, width: p.width, height: p.height });
@@ -871,9 +883,14 @@ function renderOpeningPanel(container: HTMLElement, op: Opening, editor: Editor)
   }
   sec.appendChild(el('div', { class: 'field' }, 'Schnellauswahl', btnRow));
 
-  const uInp = el('input', { type: 'number', class: 'input', min: '0.3', max: '5', step: '0.1', value: String(op.uValue) }) as HTMLInputElement;
-  uInp.addEventListener('change', () => editor.updateOpening(op.id, { uValue: Number(uInp.value) }));
-  sec.appendChild(field('U-Wert (W/m²K)', uInp));
+  // U-value — read-only when a preset is selected
+  if (op.typePresetId) {
+    sec.appendChild(el('div', { class: 'panel-info' }, `U = ${op.uValue.toFixed(1)} W/m²K`));
+  } else {
+    const uInp = el('input', { type: 'number', class: 'input', min: '0.3', max: '5', step: '0.1', value: String(op.uValue) }) as HTMLInputElement;
+    uInp.addEventListener('change', () => editor.updateOpening(op.id, { uValue: Number(uInp.value) }));
+    sec.appendChild(field('U-Wert (W/m²K)', uInp));
+  }
 
   const areaM2 = (op.width * op.height / 1_000_000).toFixed(3);
   container.appendChild(el('div', { class: 'panel-info' }, `Fläche: ${areaM2} m²`));

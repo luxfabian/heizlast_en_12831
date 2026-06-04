@@ -655,6 +655,33 @@ export class Editor {
     this.notify();
   }
 
+  /**
+   * Update every wall, opening, and room surface (floor/ceiling) that references
+   * presetId with the new uValue (and optionally thickness for walls).
+   * Called after saving a modified preset in the library panel.
+   */
+  syncPresetToProject(presetId: string, uValue: number, thickness?: number): void {
+    this.pushUndo();
+    const floors = this.project.floors.map(floor => ({
+      ...floor,
+      walls: floor.walls.map(w =>
+        w.typePresetId === presetId
+          ? { ...w, uValue, ...(thickness !== undefined ? { thickness } : {}) }
+          : w,
+      ),
+      openings: floor.openings.map(op =>
+        op.typePresetId === presetId ? { ...op, uValue } : op,
+      ),
+      rooms: floor.rooms.map(room => ({
+        ...room,
+        floors:   (room.floors   ?? []).map(f => f.typePresetId === presetId ? { ...f, uValue } : f),
+        ceilings: (room.ceilings ?? []).map(c => c.typePresetId === presetId ? { ...c, uValue } : c),
+      })),
+    }));
+    this.project = { ...this.project, floors };
+    this.notify();
+  }
+
   selectFloor(floorId: string): void {
     this.state.selectedFloorId         = floorId;
     this.state.selectedWallId          = undefined;
