@@ -1,4 +1,4 @@
-import type { WallTypePreset, OpeningTypePreset } from './presets.js';
+import type { WallTypePreset, OpeningTypePreset, CeilingTypePreset } from './presets.js';
 
 const KEY = 'heizlast_custom_presets';
 
@@ -7,10 +7,11 @@ export interface CustomPresets {
   windows:     OpeningTypePreset[];
   doors:       OpeningTypePreset[];
   garageDoors: OpeningTypePreset[];
+  floors:      CeilingTypePreset[];
 }
 
 function empty(): CustomPresets {
-  return { walls: [], windows: [], doors: [], garageDoors: [] };
+  return { walls: [], windows: [], doors: [], garageDoors: [], floors: [] };
 }
 
 export function loadCustomPresets(): CustomPresets {
@@ -23,6 +24,7 @@ export function loadCustomPresets(): CustomPresets {
       windows:     Array.isArray(parsed.windows)     ? parsed.windows     : [],
       doors:       Array.isArray(parsed.doors)       ? parsed.doors       : [],
       garageDoors: Array.isArray(parsed.garageDoors) ? parsed.garageDoors : [],
+      floors:      Array.isArray(parsed.floors)      ? parsed.floors      : [],
     };
   } catch {
     return empty();
@@ -48,11 +50,29 @@ export function addCustomOpeningPreset(preset: OpeningTypePreset): void {
   saveCustomPresets(cp);
 }
 
+export function addCustomFloorPreset(preset: CeilingTypePreset): void {
+  const cp = loadCustomPresets();
+  cp.floors = cp.floors.filter(p => p.id !== preset.id);
+  cp.floors.push(preset);
+  saveCustomPresets(cp);
+}
+
 export function removeCustomPreset(id: string): void {
   const cp = loadCustomPresets();
   cp.walls       = cp.walls.filter(p => p.id !== id);
   cp.windows     = cp.windows.filter(p => p.id !== id);
   cp.doors       = cp.doors.filter(p => p.id !== id);
   cp.garageDoors = cp.garageDoors.filter(p => p.id !== id);
+  cp.floors      = cp.floors.filter(p => p.id !== id);
+  saveCustomPresets(cp);
+}
+
+export function mergeCustomPresets(incoming: Partial<CustomPresets>): void {
+  const cp = loadCustomPresets();
+  if (Array.isArray(incoming.walls))       for (const p of incoming.walls)       { cp.walls       = cp.walls.filter(x => x.id !== p.id);       cp.walls.push(p); }
+  if (Array.isArray(incoming.windows))     for (const p of incoming.windows)     { cp.windows     = cp.windows.filter(x => x.id !== p.id);     cp.windows.push(p); }
+  if (Array.isArray(incoming.doors))       for (const p of incoming.doors)       { cp.doors       = cp.doors.filter(x => x.id !== p.id);       cp.doors.push(p); }
+  if (Array.isArray(incoming.garageDoors)) for (const p of incoming.garageDoors) { cp.garageDoors = cp.garageDoors.filter(x => x.id !== p.id); cp.garageDoors.push(p); }
+  if (Array.isArray(incoming.floors))      for (const p of incoming.floors)      { cp.floors      = cp.floors.filter(x => x.id !== p.id);      cp.floors.push(p); }
   saveCustomPresets(cp);
 }

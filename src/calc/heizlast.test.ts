@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeFij, calculateRoomHeizlast, calculateHeizlast } from './heizlast.js';
+import { computeFij, calculateRoomHeizlast, calculateHeizlast, polygonIntersectionArea } from './heizlast.js';
 import type { Room, Floor, WallSegment, Project, HullGroup, Opening } from '../model/types.js';
 import { v4 as uuidv4 } from '../utils/uuid.js';
 
@@ -356,6 +356,292 @@ describe('physics: two-room building total via calculateHeizlast', () => {
     const result = calculateHeizlast(project);
     expect(result.buildingTotal).toBeCloseTo(1026, 1);
     expect(result.designHeatLoad).toBeCloseTo(1026, 1);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// INTER-FLOOR: ceiling U-value must come from the upper room's floor preset
+//
+// Setup: two identical 5m×5m rooms, EG (level 0) directly below OG (level 1).
+// The polygon intersection is exactly 25 m².
+//
+// Assertion 1: auto-ceiling entry for EG uses OG.floors[0].uValue (not EG.ceilings[0].uValue).
+// Assertion 2: changing OG.floors[0].uValue updates the ceiling heat-loss of EG accordingly.
+// ═══════════════════════════════════════════════════════════════════════════
+
+function makeBoxFloor(
+  level: number,
+  label: string,
+  rooms: Room[],
+): Floor {
+  const T = 200;
+  const walls: WallSegment[] = [
+    makeWall(`${label}_wT`, { start: {x:    0,y:    0}, end: {x: 5000,y:    0}, thickness: T, boundaryCategory: 'exterior' }),
+    makeWall(`${label}_wR`, { start: {x: 5000,y:    0}, end: {x: 5000,y: 5000}, thickness: T, boundaryCategory: 'exterior' }),
+    makeWall(`${label}_wB`, { start: {x: 5000,y: 5000}, end: {x:    0,y: 5000}, thickness: T, boundaryCategory: 'exterior' }),
+    makeWall(`${label}_wL`, { start: {x:    0,y: 5000}, end: {x:    0,y:    0}, thickness: T, boundaryCategory: 'exterior' }),
+  ];
+  const wallIds = [`${label}_wT`, `${label}_wR`, `${label}_wB`, `${label}_wL`];
+  rooms.forEach(r => { r.wallIds = wallIds; });
+  return { id: `floor_${label}`, level, label, defaultCeilingHeight: 2500, walls, openings: [], rooms };
+}
+
+describe('inter-floor ceiling U-value inheritance', () => {
+  // EG at 20 °C, OG at 16 °C → both share a 25 m² ceiling/floor.
+  // fij (EG ceiling) = (20 − 16) / (20 − (−12)) = 4/32 = 0.125
+  // heatLoss (EG ceiling) = 25 × U_og_floor × 0.125 × 32  = 100 × U_og_floor
+
+  function makeProject(ogFloorU: number): Project {
+    const egRoom = makeRoom('eg', [], {
+      designTemperature: 20, ceilingHeight: 2500, area: 25, minAirChanges: 0,
+      floors:   [{ id: 'eg_f', uValue: 0.30, boundaryCategory: 'ground' }],
+      ceilings: [{ id: 'eg_c', uValue: 0.99, boundaryCategory: 'exterior' }], // deliberately wrong U
+    });
+    const ogRoom = makeRoom('og', [], {
+      designTemperature: 16, ceilingHeight: 2500, area: 25, minAirChanges: 0,
+      floors:   [{ id: 'og_f', uValue: ogFloorU, boundaryCategory: 'adj_heated' }],
+      ceilings: [{ id: 'og_c', uValue: 0.20,     boundaryCategory: 'exterior' }],
+    });
+    const egFloor = makeBoxFloor(0, 'EG', [egRoom]);
+    const ogFloor = makeBoxFloor(1, 'OG', [ogRoom]);
+    return {
+      id: 'p', name: 'Test', plz: '80000',
+      designTemperatureOverride: -12,
+      floors: [egFloor, ogFloor],
+      hullGroups: [],
+      createdAt: '', updatedAt: '',
+    };
+  }
+
+  // NOTE: calculateRoomHeizlast generates elementId as `${room.id}_ceiling_${ci}` (array index),
+  // so the auto-ceiling entries for EG appear as 'eg_ceiling_0', 'eg_ceiling_1', etc.
+  // We find the relevant entry by uValue/area rather than by the surface's own .id field.
+
+  it('auto-ceiling of lower room uses upper room floor U-value, not lower ceiling U-value', () => {
+    const result = calculateHeizlast(makeProject(0.25));
+    const egResult = result.rooms.find(r => r.roomId === 'eg')!.result;
+
+    // EG ceiling preset has uValue=0.99 (deliberately wrong).
+    // The auto-ceiling for the 25m² overlap must use OG floor U=0.25, not 0.99.
+    const ceilEl = egResult.elementBreakdown.find(e => e.elementType === 'ceiling' && e.area > 1);
+    expect(ceilEl).toBeDefined();
+    expect(ceilEl!.uValue).toBeCloseTo(0.25, 5);   // from OG.floors[0], NOT eg_c
+    expect(ceilEl!.area).toBeCloseTo(25, 1);
+  });
+
+  it('changing OG floor type updates EG ceiling heat loss', () => {
+    const resultA = calculateHeizlast(makeProject(0.25));
+    const resultB = calculateHeizlast(makeProject(0.15));
+
+    const egCeilA = resultA.rooms.find(r => r.roomId === 'eg')!.result
+      .elementBreakdown.find(e => e.elementType === 'ceiling' && e.area > 1)!;
+    const egCeilB = resultB.rooms.find(r => r.roomId === 'eg')!.result
+      .elementBreakdown.find(e => e.elementType === 'ceiling' && e.area > 1)!;
+
+    // fij = (20-16)/(20-(-12)) = 4/32 = 0.125
+    // heatLoss = 25 × U × 0.125 × 32 = 100 × U
+    expect(egCeilA.uValue).toBeCloseTo(0.25, 5);
+    expect(egCeilA.heatLoss).toBeCloseTo(100 * 0.25, 1);   // 25 W
+
+    expect(egCeilB.uValue).toBeCloseTo(0.15, 5);
+    expect(egCeilB.heatLoss).toBeCloseTo(100 * 0.15, 1);   // 15 W
+
+    // The auto-floor of OG must use the same U-value (same physical slab)
+    const ogFloorA = resultA.rooms.find(r => r.roomId === 'og')!.result
+      .elementBreakdown.find(e => e.elementType === 'floor' && e.area > 1)!;
+    const ogFloorB = resultB.rooms.find(r => r.roomId === 'og')!.result
+      .elementBreakdown.find(e => e.elementType === 'floor' && e.area > 1)!;
+
+    expect(ogFloorA.uValue).toBeCloseTo(0.25, 5);
+    expect(ogFloorB.uValue).toBeCloseTo(0.15, 5);
+    // OG (16°C) is cooler than EG (20°C) → fij = max(0, (16-20)/(16+12)) = 0 → no heat loss upward
+    expect(ogFloorA.heatLoss).toBeCloseTo(0, 1);
+    expect(ogFloorB.heatLoss).toBeCloseTo(0, 1);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// RESIDUAL AREA — Option A: use centerline footprint, not stored room.area
+//
+// room.area is the INSET (internal-face) area; polygon intersections are based on
+// CENTERLINE polygons.  The residual must use the same basis as the intersections
+// so that: Σ auto-ceilings + residual = centerline footprint.
+//
+// Setup: 5m×5m EG room whose stored area is deliberately set to 23 m² (simulating
+// the inset area for 200 mm walls). One OG room covers only the right half (x=2500–5000).
+//   centerline footprint(EG)  = 25 m²
+//   intersection(EG, OG)      = 12.5 m²  (right half)
+//   correct residual (opt-A)  = 25 − 12.5 = 12.5 m²
+//   wrong residual  (old code) = 23 − 12.5 = 10.5 m²   ← would fail the assertion below
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('residual ceiling uses centerline footprint (Option A)', () => {
+  function makePartialProject(storedEGArea: number): Project {
+    const T = 200;
+
+    // EG: full 5m×5m box, but we override room.area to simulate inset area
+    const egRoom = makeRoom('eg', [], {
+      designTemperature: 20, ceilingHeight: 2500, area: storedEGArea, minAirChanges: 0,
+      floors:   [{ id: 'eg_f', uValue: 0.30, boundaryCategory: 'ground' }],
+      ceilings: [{ id: 'eg_c', uValue: 0.50, boundaryCategory: 'exterior' }],
+    });
+    const egWalls: WallSegment[] = [
+      makeWall('eg_wT', { start:{x:    0,y:    0}, end:{x:5000,y:    0}, thickness:T }),
+      makeWall('eg_wR', { start:{x:5000,y:    0}, end:{x:5000,y:5000}, thickness:T }),
+      makeWall('eg_wB', { start:{x:5000,y:5000}, end:{x:    0,y:5000}, thickness:T }),
+      makeWall('eg_wL', { start:{x:    0,y:5000}, end:{x:    0,y:    0}, thickness:T }),
+    ];
+    egRoom.wallIds = ['eg_wT','eg_wR','eg_wB','eg_wL'];
+    const egFloor: Floor = { id:'fEG', level:0, label:'EG', defaultCeilingHeight:2500, walls:egWalls, openings:[], rooms:[egRoom] };
+
+    // OG: covers only right half (x = 2500–5000), centerline area = 12.5 m²
+    const ogRoom = makeRoom('og', [], {
+      designTemperature: 20, ceilingHeight: 2500, area: 12.5, minAirChanges: 0,
+      floors:   [{ id: 'og_f', uValue: 0.25, boundaryCategory: 'adj_heated' }],
+      ceilings: [{ id: 'og_c', uValue: 0.20, boundaryCategory: 'exterior' }],
+    });
+    const ogWalls: WallSegment[] = [
+      makeWall('og_wT', { start:{x:2500,y:    0}, end:{x:5000,y:    0}, thickness:T }),
+      makeWall('og_wR', { start:{x:5000,y:    0}, end:{x:5000,y:5000}, thickness:T }),
+      makeWall('og_wB', { start:{x:5000,y:5000}, end:{x:2500,y:5000}, thickness:T }),
+      makeWall('og_wL', { start:{x:2500,y:5000}, end:{x:2500,y:    0}, thickness:T }),
+    ];
+    ogRoom.wallIds = ['og_wT','og_wR','og_wB','og_wL'];
+    const ogFloor: Floor = { id:'fOG', level:1, label:'OG', defaultCeilingHeight:2500, walls:ogWalls, openings:[], rooms:[ogRoom] };
+
+    return { id:'p', name:'Test', plz:'80000', designTemperatureOverride:-12,
+             floors:[egFloor, ogFloor], hullGroups:[], createdAt:'', updatedAt:'' };
+  }
+
+  it('residual = centerline footprint − intersection, independent of stored room.area', () => {
+    // Run with two different stored areas; residual must be the same both times.
+    const resultA = calculateHeizlast(makePartialProject(25));   // stored = centerline (ideal)
+    const resultB = calculateHeizlast(makePartialProject(23));   // stored = inset (real-world)
+
+    const egA = resultA.rooms.find(r => r.roomId === 'eg')!.result;
+    const egB = resultB.rooms.find(r => r.roomId === 'eg')!.result;
+
+    // The auto-ceiling for the OG overlap must be 12.5 m² in both cases
+    const autoCeilA = egA.elementBreakdown.find(e => e.elementType === 'ceiling' && e.area > 1 && e.boundaryCategory !== 'exterior')!;
+    const autoCeilB = egB.elementBreakdown.find(e => e.elementType === 'ceiling' && e.area > 1 && e.boundaryCategory !== 'exterior')!;
+    expect(autoCeilA.area).toBeCloseTo(12.5, 1);
+    expect(autoCeilB.area).toBeCloseTo(12.5, 1);
+
+    // The residual (exterior ceiling = left half not covered by OG) must be
+    // 25 − 12.5 = 12.5 m² regardless of the stored room.area.
+    // Old code: storedArea − intersection = 23 − 12.5 = 10.5 (wrong for case B).
+    const residualA = egA.elementBreakdown.find(e => e.elementType === 'ceiling' && e.boundaryCategory === 'exterior')!;
+    const residualB = egB.elementBreakdown.find(e => e.elementType === 'ceiling' && e.boundaryCategory === 'exterior')!;
+    expect(residualA.area).toBeCloseTo(12.5, 1);
+    expect(residualB.area).toBeCloseTo(12.5, 1);  // would be 10.5 with old code → test would fail
+
+    // The residual is attributed to the correct U-value (from EG ceiling preset)
+    expect(residualA.uValue).toBeCloseTo(0.50, 5);
+    expect(residualB.uValue).toBeCloseTo(0.50, 5);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SUTHERLAND-HODGMAN DEGENERACY — shared vertex on clip edge
+//
+// When a subject-polygon vertex lies exactly on a clip edge (edgeSide = 0),
+// the algorithm must NOT call lineIntersect (which produces a spurious
+// far-away crossing when both lines share that vertex).  For a diagonal split
+// the square EG corners coincide with triangle OG corners, triggering this.
+//
+// Invariant: polygonIntersectionArea(square, triA) + polygonIntersectionArea(square, triB)
+//            == squareArea   for a diagonal bisection.
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('Sutherland-Hodgman: diagonal split symmetry', () => {
+  const N = 5000; // mm, 5 m × 5 m square
+
+  // Square corners (CW in screen/y-down coords)
+  const square: import('../model/types.js').Point2D[] = [
+    {x:0,y:0}, {x:N,y:0}, {x:N,y:N}, {x:0,y:N},
+  ];
+
+  // Diagonal from (N,0) to (0,N):
+  // Triangle A — upper-left  (shares corner (0,0), (N,0), (0,N) with square)
+  const triA: import('../model/types.js').Point2D[] = [
+    {x:0,y:0}, {x:N,y:0}, {x:0,y:N},
+  ];
+  // Triangle B — lower-right (shares corner (N,0), (N,N), (0,N) with square)
+  const triB: import('../model/types.js').Point2D[] = [
+    {x:N,y:0}, {x:N,y:N}, {x:0,y:N},
+  ];
+
+  const expectedEach = (N * N) / 2 / 1_000_000; // m²
+
+  it('intersection of square with upper-left triangle equals half area', () => {
+    const area = polygonIntersectionArea(square, triA) / 1_000_000;
+    expect(area).toBeCloseTo(expectedEach, 4);
+  });
+
+  it('intersection of square with lower-right triangle equals half area', () => {
+    const area = polygonIntersectionArea(square, triB) / 1_000_000;
+    expect(area).toBeCloseTo(expectedEach, 4);
+  });
+
+  it('two triangle intersections sum to full square area', () => {
+    const aA = polygonIntersectionArea(square, triA) / 1_000_000;
+    const aB = polygonIntersectionArea(square, triB) / 1_000_000;
+    expect(aA + aB).toBeCloseTo(N * N / 1_000_000, 4);
+  });
+
+  it('diagonal split: two equal OG rooms give equal ceiling areas on EG', () => {
+    const T = 200;
+    const egRoom = makeRoom('eg', [], {
+      designTemperature: 20, ceilingHeight: 2500, area: 25, minAirChanges: 0,
+      floors:   [{ id: 'eg_f', uValue: 0.30, boundaryCategory: 'ground' }],
+      ceilings: [{ id: 'eg_c', uValue: 0.20, boundaryCategory: 'exterior' }],
+    });
+    const ogA = makeRoom('ogA', [], {
+      designTemperature: 20, ceilingHeight: 2500, area: 12.5, minAirChanges: 0,
+      floors:   [{ id: 'ogA_f', uValue: 0.25, boundaryCategory: 'adj_heated' }],
+      ceilings: [{ id: 'ogA_c', uValue: 0.20, boundaryCategory: 'exterior' }],
+    });
+    const ogB = makeRoom('ogB', [], {
+      designTemperature: 20, ceilingHeight: 2500, area: 12.5, minAirChanges: 0,
+      floors:   [{ id: 'ogB_f', uValue: 0.25, boundaryCategory: 'adj_heated' }],
+      ceilings: [{ id: 'ogB_c', uValue: 0.20, boundaryCategory: 'exterior' }],
+    });
+
+    const egWalls: WallSegment[] = [
+      makeWall('eg_wT', { start:{x:0,y:0}, end:{x:N,y:0}, thickness:T }),
+      makeWall('eg_wR', { start:{x:N,y:0}, end:{x:N,y:N}, thickness:T }),
+      makeWall('eg_wB', { start:{x:N,y:N}, end:{x:0,y:N}, thickness:T }),
+      makeWall('eg_wL', { start:{x:0,y:N}, end:{x:0,y:0}, thickness:T }),
+    ];
+    egRoom.wallIds = ['eg_wT','eg_wR','eg_wB','eg_wL'];
+
+    const diagWall = makeWall('diag', { start:{x:N,y:0}, end:{x:0,y:N}, thickness:T });
+    const ogWalls: WallSegment[] = [
+      makeWall('og_wT', { start:{x:0,y:0}, end:{x:N,y:0}, thickness:T }),
+      makeWall('og_wR', { start:{x:N,y:0}, end:{x:N,y:N}, thickness:T }),
+      makeWall('og_wB', { start:{x:N,y:N}, end:{x:0,y:N}, thickness:T }),
+      makeWall('og_wL', { start:{x:0,y:N}, end:{x:0,y:0}, thickness:T }),
+      diagWall,
+    ];
+    ogA.wallIds = ['og_wT', 'diag', 'og_wL'];
+    ogB.wallIds = ['diag', 'og_wR', 'og_wB'];
+
+    const egFloor: Floor = { id:'fEG', level:0, label:'EG', defaultCeilingHeight:2500, walls:egWalls, openings:[], rooms:[egRoom] };
+    const ogFloor: Floor = { id:'fOG', level:1, label:'OG', defaultCeilingHeight:2500, walls:ogWalls, openings:[], rooms:[ogA, ogB] };
+
+    const project: Project = { id:'p', name:'Test', plz:'80000', designTemperatureOverride:-12,
+      floors:[egFloor, ogFloor], hullGroups:[], createdAt:'', updatedAt:'' };
+
+    const result = calculateHeizlast(project);
+    const egBreakdown = result.rooms.find(r => r.roomId === 'eg')!.result.elementBreakdown;
+    const ceilEls = egBreakdown.filter(e => e.elementType === 'ceiling');
+
+    // Expect two ceiling entries (one per OG room), each ≈ 12.5 m²
+    expect(ceilEls).toHaveLength(2);
+    expect(ceilEls[0].area).toBeCloseTo(12.5, 1);
+    expect(ceilEls[1].area).toBeCloseTo(12.5, 1);
+    // Must be equal (symmetric split)
+    expect(Math.abs(ceilEls[0].area - ceilEls[1].area)).toBeLessThan(0.01);
   });
 });
 

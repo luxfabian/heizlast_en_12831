@@ -3,7 +3,7 @@ import type {
   BoundaryCategory, ElementHeatLoss, RoomHeizlastResult, HeizlastResult, HullSummaryEntry,
 } from '../model/types.js';
 import { getDesignTemperature } from '../climate/index.js';
-import { wallLength } from '../editor/geometry.js';
+import { wallLength, polygonAreaM2 } from '../editor/geometry.js';
 
 const DEFAULT_MIN_AIR_CHANGES = 0.5;
 const DEFAULT_U_FLOOR         = 0.25; // W/m²K
@@ -167,9 +167,9 @@ export function calculateRoomHeizlast(
   return { transmissionLoss, ventilationLoss, totalLoss: transmissionLoss + ventilationLoss, elementBreakdown: breakdown };
 }
 
-// ---- Room polygon extraction ----
+// ---- Room polygon extraction (exported for UI use) ----
 
-function getRoomPolygon(room: Room, floor: Floor): Point2D[] | null {
+export function getRoomPolygon(room: Room, floor: Floor): Point2D[] | null {
   const wm = new Map(floor.walls.map(w => [w.id, w]));
   const walls = room.wallIds.map(id => wm.get(id)).filter(Boolean) as WallSegment[];
   if (walls.length < 3) return null;
@@ -215,14 +215,23 @@ function sutherlandHodgman(subject: Point2D[], clip: Point2D[]): Point2D[] {
     for (let j = 0; j < input.length; j++) {
       const curr = input[j];
       const prev = input[(j - 1 + input.length) % input.length];
-      const currIn = edgeSide(curr, a, b) >= 0;
-      const prevIn = edgeSide(prev, a, b) >= 0;
+      const currSide = edgeSide(curr, a, b);
+      const prevSide = edgeSide(prev, a, b);
+      const currIn = currSide >= 0;
+      const prevIn = prevSide >= 0;
       if (currIn) {
         if (!prevIn) { const p = lineIntersect(prev, curr, a, b); if (p) output.push(p); }
         output.push(curr);
       } else if (prevIn) {
-        const p = lineIntersect(prev, curr, a, b);
-        if (p) output.push(p);
+        // When prev lies exactly on the clip edge (prevSide ≈ 0), prev IS the
+        // crossing point.  Calling lineIntersect is degenerate in this case
+        // (both lines share prev) and returns a spurious far-away point.
+        if (Math.abs(prevSide) < 1e-9) {
+          output.push({ x: prev.x, y: prev.y });
+        } else {
+          const p = lineIntersect(prev, curr, a, b);
+          if (p) output.push(p);
+        }
       }
     }
   }
@@ -239,7 +248,7 @@ function shoelaceArea(pts: Point2D[]): number {
   return area / 2;
 }
 
-function polygonIntersectionArea(subject: Point2D[], clip: Point2D[]): number {
+export function polygonIntersectionArea(subject: Point2D[], clip: Point2D[]): number {
   const result = sutherlandHodgman(subject, clip);
   if (result.length < 3) return 0;
   return Math.abs(shoelaceArea(result));
@@ -266,7 +275,7 @@ export function calculateHeizlast(project: Project): HeizlastResult {
       const lowerPoly = getRoomPolygon(lowerRoom, lowerFloor);
       if (!lowerPoly) continue;
 
-      const ceilLinks: { roomId: string; area: number; temp: number }[] = [];
+      const ceilLinks: { roomId: string; area: number; temp: number; flrU: number }[] = [];
 
       for (const upperRoom of upperFloor.rooms) {
         const upperPoly = getRoomPolygon(upperRoom, upperFloor);
@@ -275,12 +284,13 @@ export function calculateHeizlast(project: Project): HeizlastResult {
         const intersectionM2  = intersectionMm2 / 1_000_000;
         if (intersectionM2 < 0.01) continue;
 
-        ceilLinks.push({ roomId: upperRoom.id, area: intersectionM2, temp: upperRoom.designTemperature });
+        // The upper room owns the slab — its floor U-value is the single source of truth.
+        const flrU = upperRoom.floors?.[0]?.uValue ?? DEFAULT_U_FLOOR;
+        ceilLinks.push({ roomId: upperRoom.id, area: intersectionM2, temp: upperRoom.designTemperature, flrU });
 
         // Upper room: auto floor element toward lower room
         if (!augmentedFloors.has(upperRoom.id)) augmentedFloors.set(upperRoom.id, []);
         const flrCat: BoundaryCategory = Math.abs(upperRoom.designTemperature - lowerRoom.designTemperature) <= 4 ? 'adj_heated' : 'adj_reduced';
-        const flrU = upperRoom.floors?.[0]?.uValue ?? DEFAULT_U_FLOOR;
         augmentedFloors.get(upperRoom.id)!.push({
           id: `${upperRoom.id}_autofloor_${lowerRoom.id}`,
           uValue: flrU,
@@ -291,14 +301,17 @@ export function calculateHeizlast(project: Project): HeizlastResult {
       }
 
       if (ceilLinks.length > 0) {
-        const ceilU = lowerRoom.ceilings?.[0]?.uValue ?? DEFAULT_U_CEILING;
+        // Each ceiling slice inherits the U-value from the upper room's floor (same slab, one U-value).
         const ceilEntries: ThermalSurface[] = ceilLinks.map(link => {
           const cat: BoundaryCategory = Math.abs(lowerRoom.designTemperature - link.temp) <= 4 ? 'adj_heated' : 'adj_reduced';
-          return { id: `${lowerRoom.id}_autoceil_${link.roomId}`, uValue: ceilU, boundaryCategory: cat, adjacentRoomId: link.roomId, areaOverride: link.area };
+          return { id: `${lowerRoom.id}_autoceil_${link.roomId}`, uValue: link.flrU, boundaryCategory: cat, adjacentRoomId: link.roomId, areaOverride: link.area };
         });
-        // Residual ceiling area (not covered by any room above) → use user config or exterior
+        // Residual ceiling area (not covered by any room above) → use user config or exterior.
+        // Use the centerline polygon footprint, not room.area (which is the inset/internal-face area),
+        // so the residual is consistent with the centerline-based intersection areas.
         const totalIntersection = ceilLinks.reduce((s, l) => s + l.area, 0);
-        const residual = (lowerRoom.area ?? 0) - totalIntersection;
+        const ceilingFootprint  = polygonAreaM2(lowerPoly);
+        const residual = ceilingFootprint - totalIntersection;
         if (residual > 0.01) {
           const fallback = lowerRoom.ceilings?.[0];
           ceilEntries.push({

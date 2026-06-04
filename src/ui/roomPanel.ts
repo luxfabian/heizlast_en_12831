@@ -57,6 +57,22 @@ export function renderRoomPanel(
     const label = el('span', { class: 'floor-section-label' }, floor.label);
     header.appendChild(label);
 
+    if (editor && floors.length > 1) {
+      const upBtn = el('button', {
+        class: 'btn btn-xs floor-reorder-btn', title: 'Etage nach oben',
+        ...(fi === 0 ? { disabled: '' } : {}),
+      }, '↑') as HTMLButtonElement;
+      upBtn.addEventListener('click', e => { e.stopPropagation(); editor.reorderFloor(floor.id, 'up'); });
+      header.appendChild(upBtn);
+
+      const downBtn = el('button', {
+        class: 'btn btn-xs floor-reorder-btn', title: 'Etage nach unten',
+        ...(fi === floors.length - 1 ? { disabled: '' } : {}),
+      }, '↓') as HTMLButtonElement;
+      downBtn.addEventListener('click', e => { e.stopPropagation(); editor.reorderFloor(floor.id, 'down'); });
+      header.appendChild(downBtn);
+    }
+
     let removeBtn: HTMLButtonElement | null = null;
     if (canRemove && editor) {
       removeBtn = el('button', { class: 'btn btn-xs floor-remove-btn', title: `Etage "${floor.label}" löschen` }, '×') as HTMLButtonElement;
@@ -82,15 +98,15 @@ export function renderRoomPanel(
       }
     }
 
-    // Click: activate floor (if not active) and expand; toggle expand if already active
+    // Click: activate floor (if not active) and expand; toggle expand if already active.
+    // Always select the floor so the property panel shows its details.
     header.addEventListener('click', e => {
       if (removeBtn && (e.target === removeBtn || removeBtn.contains(e.target as Node))) return;
+      if (editor) editor.selectFloor(floor.id);
       if (!isActive && editor) {
-        // Activate this floor — also expand it
         floorExpanded.set(floor.id, true);
         editor.setActiveFloor(fi);
       } else {
-        // Toggle expansion of the active floor section
         const nowExpanded = floorBody.style.display !== 'none';
         floorExpanded.set(floor.id, !nowExpanded);
         toggleArrow.textContent = !nowExpanded ? '▾' : '▸';

@@ -986,6 +986,24 @@ h4 {
   opacity: 1;
 }
 
+.floor-reorder-btn {
+  color: var(--text-muted);
+  border-color: transparent;
+  background: transparent;
+  font-size: 12px;
+  padding: 0 4px;
+  min-width: 20px;
+}
+.floor-reorder-btn:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--bg-elevated);
+  border-color: var(--border);
+}
+.floor-reorder-btn:disabled {
+  opacity: 0.25;
+  cursor: default;
+}
+
 .room-empty, .room-no-calc {
   font-size: 11px;
   color: var(--text-dim);
@@ -1167,18 +1185,19 @@ h4 {
 .lib-delete-btn:hover { color: var(--red); }
 .lib-edit-btn:hover { color: var(--accent); }
 
-/* Preset cards */
+/* Preset cards — compact one-liners */
 .lib-card {
   display: flex;
   align-items: center;
-  gap: 7px;
-  padding: 5px 7px;
-  border-radius: 4px;
+  gap: 5px;
+  padding: 2px 5px;
+  border-radius: 3px;
   cursor: pointer;
   transition: background 0.1s;
   border: 1px solid transparent;
-  margin-bottom: 2px;
+  margin-bottom: 1px;
   user-select: none;
+  min-height: 22px;
 }
 
 .lib-card:hover { background: var(--bg-elevated); border-color: var(--border); }
@@ -1204,36 +1223,24 @@ h4 {
   filter: grayscale(0.4);
 }
 
-.lib-card-info {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-
 .lib-card-name {
-  font-size: 12px;
-  font-weight: 600;
+  flex: 1;
+  font-size: 11px;
+  font-weight: 500;
   color: var(--text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.lib-card--active .lib-card-name { color: var(--accent); }
+.lib-card--active .lib-card-name { color: var(--accent); font-weight: 600; }
 
-.lib-card-meta {
+.lib-card-value {
   font-size: 10px;
-  color: var(--text-dim);
   font-family: "Courier New", monospace;
-}
-
-.lib-check {
-  font-size: 11px;
-  color: var(--accent);
+  color: var(--text-muted);
   flex-shrink: 0;
-  font-weight: 700;
+  white-space: nowrap;
 }
 
 /* Room overview rows */
@@ -1382,6 +1389,31 @@ h4 {
   padding: 5px 8px;
   margin-top: 4px;
   line-height: 1.4;
+}
+
+/* ── Inherited ceiling rows (from floor above) ───── */
+.ceil-inherited-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 3px 6px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  margin-bottom: 3px;
+}
+
+.ceil-inherited-room {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text);
+  flex-shrink: 0;
+}
+
+.ceil-inherited-val {
+  font-size: 10px;
+  font-family: "Courier New", monospace;
+  color: var(--text-muted);
 }
 
 /* ── Ceiling section ─────────────────────────────── */

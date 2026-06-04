@@ -1,5 +1,6 @@
 import './style.css';
 import { loadProject, saveProject, clearProject, exportProjectJSON, importProjectJSON } from './model/persistence.js';
+import { loadCustomPresets, mergeCustomPresets } from './library/customPresets.js';
 import { Editor } from './editor/editorState.js';
 import { renderFloor } from './editor/canvasRenderer.js';
 import { renderPropertyPanel } from './ui/propertyPanel.js';
@@ -267,7 +268,9 @@ document.getElementById('pdf-btn')?.addEventListener('click', () => {
 
 // Save / Load
 document.getElementById('save-btn')?.addEventListener('click', () => {
-  exportProjectJSON(editor.getProject() as Project);
+  const proj = editor.getProject() as Project;
+  // Embed custom presets so they travel with the project file
+  exportProjectJSON({ ...proj, customPresets: loadCustomPresets() } as Project);
 });
 
 const loadInput = document.getElementById('load-input') as HTMLInputElement;
@@ -276,6 +279,8 @@ loadInput?.addEventListener('change', async () => {
   if (!file) return;
   try {
     const proj = await importProjectJSON(file);
+    // Restore any custom presets embedded in the file
+    if ((proj as any).customPresets) mergeCustomPresets((proj as any).customPresets);
     saveProject(proj);
     location.reload();
   } catch (e) {

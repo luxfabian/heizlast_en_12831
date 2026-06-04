@@ -520,14 +520,37 @@ export function renderSankey(container: HTMLElement, result: HeizlastResult, pro
     svg.appendChild(txt(LX - 10, mid + 20, 'end', `${(cats[ci].total / total * 100).toFixed(0)} %`, 'sk-pct'));
   }
 
-  // ── Right nodes + labels ──────────────────────────────────────────────────
+  // ── Right nodes + labels — single row, mixed styles via tspan ───────────
   for (let ri = 0; ri < rooms.length; ri++) {
     const { y, h } = roomPos[ri];
     svg.appendChild(s('rect', { x: String(RX), y: String(y), width: String(RW), height: String(h), fill: '#3b82f6', rx: '2' }));
     const mid = y + h / 2;
-    svg.appendChild(txt(RX + RW + 10, mid - 6,  'start', rooms[ri].label,                    'sk-label'));
-    svg.appendChild(txt(RX + RW + 10, mid + 8,  'start', `${Math.round(rooms[ri].total)} W`, 'sk-value'));
-    svg.appendChild(txt(RX + RW + 10, mid + 20, 'start', `${(rooms[ri].total / total * 100).toFixed(0)} %`, 'sk-pct'));
+    const pct = (rooms[ri].total / total * 100).toFixed(0);
+
+    const textEl = document.createElementNS(ns, 'text');
+    textEl.setAttribute('x', String(RX + RW + 10));
+    textEl.setAttribute('y', String(mid));
+    textEl.setAttribute('text-anchor', 'start');
+    textEl.setAttribute('dominant-baseline', 'middle');
+
+    const span = (text: string, style: string) => {
+      const t = document.createElementNS(ns, 'tspan');
+      t.setAttribute('style', style);
+      t.textContent = text;
+      return t;
+    };
+    const sep = () => span('  ·  ', 'font-size:9px;fill:#475569;font-family:"Courier New",monospace');
+
+    textEl.appendChild(span(rooms[ri].label,
+      'font-size:11px;fill:#94a3b8;font-family:"Inter",system-ui,sans-serif'));
+    textEl.appendChild(sep());
+    textEl.appendChild(span(`${Math.round(rooms[ri].total)} W`,
+      'font-size:10px;fill:#cbd5e1;font-family:"Courier New",monospace;font-weight:600'));
+    textEl.appendChild(sep());
+    textEl.appendChild(span(`${pct} %`,
+      'font-size:9px;fill:#475569;font-family:"Courier New",monospace'));
+
+    svg.appendChild(textEl);
   }
 
   // ── Title + subtitle ──────────────────────────────────────────────────────

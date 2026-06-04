@@ -37,6 +37,9 @@ export interface EditorState {
   selectedRoomId?: string;
   selectedWallId?: string;
   selectedOpeningId?: string;
+  selectedLibraryItemId?: string;
+  selectedLibraryItemType?: 'wall' | 'window' | 'door' | 'garage_door' | 'floor';
+  selectedFloorId?: string;
 
   showHeatMap: boolean;
   heizlastResult?: HeizlastResult;
@@ -384,9 +387,12 @@ export class Editor {
       const { opStart, opEnd } = openingEndpoints(op.positionAlongWall, op.width, wall.start, wall.end);
       const { dist: d } = distPointToSegment(worldPt, opStart, opEnd);
       if (d < 300) {
-        this.state.selectedOpeningId = op.id;
-        this.state.selectedWallId    = undefined;
-        this.state.selectedRoomId    = undefined;
+        this.state.selectedOpeningId         = op.id;
+        this.state.selectedWallId            = undefined;
+        this.state.selectedRoomId            = undefined;
+        this.state.selectedLibraryItemId     = undefined;
+        this.state.selectedLibraryItemType   = undefined;
+        this.state.selectedFloorId           = undefined;
         this.notify(); return;
       }
     }
@@ -395,9 +401,12 @@ export class Editor {
     for (const wall of this.floor.walls) {
       const { dist: d } = distPointToSegment(worldPt, wall.start, wall.end);
       if (d < Math.max(wall.thickness / 2 + 80, 200)) {
-        this.state.selectedWallId    = wall.id;
-        this.state.selectedRoomId    = undefined;
-        this.state.selectedOpeningId = undefined;
+        this.state.selectedWallId            = wall.id;
+        this.state.selectedRoomId            = undefined;
+        this.state.selectedOpeningId         = undefined;
+        this.state.selectedLibraryItemId     = undefined;
+        this.state.selectedLibraryItemType   = undefined;
+        this.state.selectedFloorId           = undefined;
         this.notify(); return;
       }
     }
@@ -406,9 +415,12 @@ export class Editor {
     for (const room of this.floor.rooms) {
       const pts = roomPolyFromWalls(room.wallIds, wallMap);
       if (pts && pointInPolygon(worldPt, pts)) {
-        this.state.selectedRoomId    = room.id;
-        this.state.selectedWallId    = undefined;
-        this.state.selectedOpeningId = undefined;
+        this.state.selectedRoomId            = room.id;
+        this.state.selectedWallId            = undefined;
+        this.state.selectedOpeningId         = undefined;
+        this.state.selectedLibraryItemId     = undefined;
+        this.state.selectedLibraryItemType   = undefined;
+        this.state.selectedFloorId           = undefined;
         this.notify(); return;
       }
     }
@@ -615,6 +627,41 @@ export class Editor {
   renameFloor(floorId: string, label: string): void {
     const floors = this.project.floors.map(f => f.id === floorId ? { ...f, label } : f);
     this.project = { ...this.project, floors };
+    this.notify();
+  }
+
+  reorderFloor(floorId: string, direction: 'up' | 'down'): void {
+    const idx = this.project.floors.findIndex(f => f.id === floorId);
+    if (idx === -1) return;
+    const targetIdx = direction === 'up' ? idx - 1 : idx + 1;
+    if (targetIdx < 0 || targetIdx >= this.project.floors.length) return;
+    this.pushUndo();
+    const floors = [...this.project.floors];
+    [floors[idx], floors[targetIdx]] = [floors[targetIdx], floors[idx]];
+    const releveled = floors.map((f, i) => ({ ...f, level: i }));
+    this.project = { ...this.project, floors: releveled };
+    if (this.state.activeFloorIndex === idx) this.state.activeFloorIndex = targetIdx;
+    else if (this.state.activeFloorIndex === targetIdx) this.state.activeFloorIndex = idx;
+    this.notify();
+  }
+
+  selectLibraryItem(id: string, type: 'wall' | 'window' | 'door' | 'garage_door' | 'floor'): void {
+    this.state.selectedLibraryItemId   = id;
+    this.state.selectedLibraryItemType = type;
+    this.state.selectedWallId          = undefined;
+    this.state.selectedRoomId          = undefined;
+    this.state.selectedOpeningId       = undefined;
+    this.state.selectedFloorId         = undefined;
+    this.notify();
+  }
+
+  selectFloor(floorId: string): void {
+    this.state.selectedFloorId         = floorId;
+    this.state.selectedWallId          = undefined;
+    this.state.selectedRoomId          = undefined;
+    this.state.selectedOpeningId       = undefined;
+    this.state.selectedLibraryItemId   = undefined;
+    this.state.selectedLibraryItemType = undefined;
     this.notify();
   }
 
