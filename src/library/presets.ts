@@ -1,10 +1,7 @@
-import type { BoundaryCategory } from '../model/types.js';
-
 export interface CeilingTypePreset {
   id: string;
   name: string;
   uValue: number;
-  defaultCategory: BoundaryCategory;
 }
 
 export interface WallTypePreset {
@@ -119,19 +116,19 @@ export const GARAGE_PRESETS: OpeningTypePreset[] = [
 
 export const CEILING_PRESETS: CeilingTypePreset[] = [
   // ── Pitched/flat roofs, exterior-facing ────────────────────────────────────
-  { id: 'roof_passive',    name: 'Dach KfW 40',           uValue: 0.12, defaultCategory: 'exterior' },
-  { id: 'roof_kfw40',      name: 'Dach KfW 55',           uValue: 0.15, defaultCategory: 'exterior' },
-  { id: 'roof_kfw55',      name: 'Dach GEG 2024',         uValue: 0.20, defaultCategory: 'exterior' },
-  { id: 'roof_neubau',     name: 'Dach 2002–2015',        uValue: 0.30, defaultCategory: 'exterior' },
-  { id: 'roof_1995_2001',  name: 'Dach 1995–2001',        uValue: 0.45, defaultCategory: 'exterior' },
-  { id: 'roof_1979_1994',  name: 'Dach 1979–1994',        uValue: 0.70, defaultCategory: 'exterior' },
-  { id: 'roof_altbau',     name: 'Dach 1969–1978',        uValue: 0.90, defaultCategory: 'exterior' },
-  { id: 'roof_vor1969',    name: 'Dach vor 1969 (unged.)',uValue: 1.60, defaultCategory: 'exterior' },
+  { id: 'roof_passive',    name: 'Dach KfW 40',            uValue: 0.12 },
+  { id: 'roof_kfw40',      name: 'Dach KfW 55',            uValue: 0.15 },
+  { id: 'roof_kfw55',      name: 'Dach GEG 2024',          uValue: 0.20 },
+  { id: 'roof_neubau',     name: 'Dach 2002–2015',         uValue: 0.30 },
+  { id: 'roof_1995_2001',  name: 'Dach 1995–2001',         uValue: 0.45 },
+  { id: 'roof_1979_1994',  name: 'Dach 1979–1994',         uValue: 0.70 },
+  { id: 'roof_altbau',     name: 'Dach 1969–1978',         uValue: 0.90 },
+  { id: 'roof_vor1969',    name: 'Dach vor 1969 (unged.)', uValue: 1.60 },
   // ── Ceiling below unheated attic or cellar ─────────────────────────────────
-  { id: 'ceil_dachboden',  name: 'Decke zu Dachboden',    uValue: 0.25, defaultCategory: 'unheated' },
-  { id: 'ceil_keller',     name: 'Decke zu Keller',       uValue: 0.35, defaultCategory: 'unheated' },
+  { id: 'ceil_dachboden',  name: 'Decke zu Dachboden',     uValue: 0.25 },
+  { id: 'ceil_keller',     name: 'Decke zu Keller',        uValue: 0.35 },
   // ── Inter-floor (heated room above) ────────────────────────────────────────
-  { id: 'ceil_beheizt',    name: 'Decke zu Beheiztem',    uValue: 0.40, defaultCategory: 'adj_heated' },
+  { id: 'ceil_beheizt',    name: 'Decke zu Beheiztem',     uValue: 0.40 },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -141,13 +138,13 @@ export const CEILING_PRESETS: CeilingTypePreset[] = [
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const FLOOR_PRESETS: CeilingTypePreset[] = [
-  { id: 'floor_kfw40',    name: 'Bodenplatte KfW 40',     uValue: 0.15, defaultCategory: 'ground' },
-  { id: 'floor_neubau',   name: 'Bodenplatte GEG 2024',   uValue: 0.30, defaultCategory: 'ground' },
-  { id: 'floor_2002',     name: 'Bodenplatte 2002–2015',  uValue: 0.40, defaultCategory: 'ground' },
-  { id: 'floor_1995',     name: 'Bodenplatte 1995–2001',  uValue: 0.50, defaultCategory: 'ground' },
-  { id: 'floor_altbau',   name: 'Bodenplatte Altbau',     uValue: 0.80, defaultCategory: 'ground' },
-  { id: 'floor_above',    name: 'Decke über Beheiztem',   uValue: 0.40, defaultCategory: 'adj_heated' },
-  { id: 'floor_ext',      name: 'Decke über Außenluft',   uValue: 0.25, defaultCategory: 'exterior' },
+  { id: 'floor_kfw40',    name: 'Bodenplatte KfW 40',    uValue: 0.15 },
+  { id: 'floor_neubau',   name: 'Bodenplatte GEG 2024',  uValue: 0.30 },
+  { id: 'floor_2002',     name: 'Bodenplatte 2002–2015', uValue: 0.40 },
+  { id: 'floor_1995',     name: 'Bodenplatte 1995–2001', uValue: 0.50 },
+  { id: 'floor_altbau',   name: 'Bodenplatte Altbau',    uValue: 0.80 },
+  { id: 'floor_above',    name: 'Decke über Beheiztem',  uValue: 0.40 },
+  { id: 'floor_ext',      name: 'Decke über Außenluft',  uValue: 0.25 },
 ];
 
 export const DEFAULT_CEILING_PRESET_ID = 'roof_neubau';

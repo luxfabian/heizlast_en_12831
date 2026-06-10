@@ -264,9 +264,7 @@ function makeFloorCard(
     }
     const p = allFloorPresets.find(pr => pr.id === presetSel.value);
     if (!p) return;
-    const patch = hasBelow
-      ? { typePresetId: p.id, uValue: p.uValue }
-      : { typePresetId: p.id, uValue: p.uValue, boundaryCategory: p.defaultCategory };
+    const patch = { typePresetId: p.id, uValue: p.uValue };
     const updated = floors.map((f, i) => i === index ? { ...f, ...patch } : f);
     editor.updateRoom(room.id, { floors: updated });
   });
@@ -466,9 +464,7 @@ function makeCeilingCard(
     }
     const p = CEILING_PRESETS.find(pr => pr.id === presetSel.value);
     if (!p) return;
-    const patch = hasAbove
-      ? { typePresetId: p.id, uValue: p.uValue }
-      : { typePresetId: p.id, uValue: p.uValue, boundaryCategory: p.defaultCategory };
+    const patch = { typePresetId: p.id, uValue: p.uValue };
     const updated = ceilings.map((c, i) => i === index ? { ...c, ...patch } : c);
     editor.updateRoom(room.id, { ceilings: updated });
   });
@@ -539,14 +535,6 @@ function makeCeilingCard(
 
 // ---- Library item panel ----
 
-const FLOOR_CAT_OPTIONS: [BoundaryCategory, string][] = [
-  ['ground',       'Erdreich'],
-  ['adj_heated',   'Beheizt (darüber)'],
-  ['exterior',     'Außenluft'],
-  ['unheated',     'Unbeheizt'],
-  ['adj_neighbor', 'Nachbargebäude'],
-];
-
 function renderLibraryItemPanel(
   container: HTMLElement,
   id: string,
@@ -601,23 +589,16 @@ function renderLibraryItemPanel(
 
     const nameInp = el('input', { type: 'text', class: 'input', value: preset.name }) as HTMLInputElement;
     const uInp    = el('input', { type: 'number', class: 'input', min: '0.05', max: '5', step: '0.01', value: String(preset.uValue) }) as HTMLInputElement;
-    const catSel  = el('select', { class: 'input' }) as HTMLSelectElement;
-    for (const [v, l] of FLOOR_CAT_OPTIONS) {
-      const opt = el('option', { value: v }, l) as HTMLOptionElement;
-      if (v === preset.defaultCategory) opt.selected = true;
-      catSel.appendChild(opt);
-    }
 
     sec.appendChild(field('Name', nameInp));
     sec.appendChild(field('U-Wert (W/m²K)', uInp));
-    sec.appendChild(field('Grenzkategorie', catSel));
 
     const saveBtn = el('button', { class: 'btn btn-primary btn-sm', style: 'margin-top:8px' }, 'Speichern');
     saveBtn.addEventListener('click', () => {
       const uVal = Number(uInp.value);
       const p: CeilingTypePreset = {
         id, name: nameInp.value.trim() || preset.name,
-        uValue: uVal, defaultCategory: catSel.value as BoundaryCategory,
+        uValue: uVal,
       };
       addCustomFloorPreset(p);
       editor.syncPresetToProject(id, uVal);

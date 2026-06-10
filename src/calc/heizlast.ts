@@ -16,15 +16,16 @@ export function computeFij(params: {
   tE: number;
   category: BoundaryCategory;
   unheatedSpaceTemp?: number;
+  tGround?: number;
 }): number {
-  const { tInt, tAdj, tE, category, unheatedSpaceTemp } = params;
+  const { tInt, tAdj, tE, category, unheatedSpaceTemp, tGround = 10 } = params;
   const denom = tInt - tE;
   if (Math.abs(denom) < 0.001) return 0;
   switch (category) {
     case 'exterior': return 1.0;
     case 'adj_heated':
     case 'adj_reduced': return Math.max(0, (tInt - tAdj) / denom);
-    case 'ground':      return 0.45;
+    case 'ground':      return (tInt - tGround) / denom;
     case 'unheated': {
       const tU = unheatedSpaceTemp ?? (tE + 0.5 * (tInt - tE));
       return (tInt - tU) / denom;
@@ -84,6 +85,7 @@ export function calculateRoomHeizlast(
   floor: Floor,
   tE: number,
   allRooms: Room[],
+  tGround = 10,
 ): RoomHeizlastResult {
   const tInt = room.designTemperature;
   const breakdown: ElementHeatLoss[] = [];
@@ -94,7 +96,7 @@ export function calculateRoomHeizlast(
 
     const category = wall.boundaryCategory;
     const tAdj     = getAdjacentRoomTemp(wall, room.id, allRooms) ?? tE;
-    const fij      = computeFij({ tInt, tAdj, tE, category, unheatedSpaceTemp: wall.unheatedSpaceTemp });
+    const fij      = computeFij({ tInt, tAdj, tE, category, unheatedSpaceTemp: wall.unheatedSpaceTemp, tGround });
     const actualDeltaT = fij * (tInt - tE);
 
     const netArea  = wallNetAreaM2(wall, room.ceilingHeight, floor.openings, floor);
@@ -126,7 +128,7 @@ export function calculateRoomHeizlast(
       const tAdj = (flr.boundaryCategory === 'adj_heated' || flr.boundaryCategory === 'adj_reduced')
         ? (flr.adjacentRoomId ? (allRooms.find(r => r.id === flr.adjacentRoomId)?.designTemperature ?? tE) : tE)
         : tE;
-      const floorFij = computeFij({ tInt, tAdj, tE, category: flr.boundaryCategory, unheatedSpaceTemp: flr.unheatedSpaceTemp });
+      const floorFij = computeFij({ tInt, tAdj, tE, category: flr.boundaryCategory, unheatedSpaceTemp: flr.unheatedSpaceTemp, tGround });
       breakdown.push({
         elementId: `${room.id}_floor_${fi}`, elementType: 'floor', boundaryCategory: flr.boundaryCategory,
         area, uValue: flr.uValue, fij: floorFij,
@@ -148,7 +150,7 @@ export function calculateRoomHeizlast(
       const tAdj = (ceil.boundaryCategory === 'adj_heated' || ceil.boundaryCategory === 'adj_reduced')
         ? (ceil.adjacentRoomId ? (allRooms.find(r => r.id === ceil.adjacentRoomId)?.designTemperature ?? tE) : tE)
         : tE;
-      const fij         = computeFij({ tInt, tAdj, tE, category: ceil.boundaryCategory, unheatedSpaceTemp: ceil.unheatedSpaceTemp });
+      const fij         = computeFij({ tInt, tAdj, tE, category: ceil.boundaryCategory, unheatedSpaceTemp: ceil.unheatedSpaceTemp, tGround });
       const actualDeltaT = fij * (tInt - tE);
       breakdown.push({
         elementId: `${room.id}_ceiling_${ci}`, elementType: 'ceiling',
@@ -258,6 +260,7 @@ export function calculateHeizlast(project: Project): HeizlastResult {
   const { temp: tE } = project.designTemperatureOverride !== undefined
     ? { temp: project.designTemperatureOverride }
     : getDesignTemperature(project.plz);
+  const tGround = project.groundTemperature ?? 10;
 
   const sortedFloors = [...project.floors].sort((a, b) => a.level - b.level);
   const allRooms: Room[] = sortedFloors.flatMap(f => f.rooms);
@@ -334,7 +337,7 @@ export function calculateHeizlast(project: Project): HeizlastResult {
         ceilings: augmentedCeilings.get(room.id) ?? room.ceilings,
         floors:   augmentedFloors.get(room.id)   ?? room.floors,
       };
-      return { roomId: room.id, result: calculateRoomHeizlast(augRoom, floor, tE, allRooms) };
+      return { roomId: room.id, result: calculateRoomHeizlast(augRoom, floor, tE, allRooms, tGround) };
     }),
   );
 

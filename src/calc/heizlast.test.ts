@@ -58,8 +58,9 @@ describe('computeFij', () => {
     expect(fij).toBeCloseTo((20 - 10) / (20 - (-12)), 5);
   });
 
-  it('ground returns 0.45 simplified', () => {
-    expect(computeFij({ tInt: 20, tAdj: 0, tE: -12, category: 'ground' })).toBe(0.45);
+  it('ground uses (tInt − tGround) / (tInt − tE)', () => {
+    const fij = computeFij({ tInt: 20, tAdj: 0, tE: -12, category: 'ground', tGround: 10 });
+    expect(fij).toBeCloseTo((20 - 10) / (20 - (-12)), 5);
   });
 
   it('unheated with explicit space temp returns correct fij', () => {
@@ -147,12 +148,12 @@ describe('calculateRoomHeizlast', () => {
     expect(sharedEl!.fij).toBeCloseTo((20 - 15) / (20 - (-12)), 5);
   });
 
-  it('ground floor slab uses fij=0.45', () => {
+  it('ground floor slab fij = (tInt − tGround) / (tInt − tE)', () => {
     const room   = makeRoom('r1', [], { floorType: 'ground', area: 20 });
     const floor  = makeFloor([], [room]);
-    const result = calculateRoomHeizlast(room, floor, -12, [room]);
+    const result = calculateRoomHeizlast(room, floor, -12, [room], 10);
     const floorEl = result.elementBreakdown.find(e => e.elementType === 'floor');
-    expect(floorEl!.fij).toBeCloseTo(0.45, 5);
+    expect(floorEl!.fij).toBeCloseTo((20 - 10) / (20 - (-12)), 5);  // 10/32 ≈ 0.3125
   });
 
   it('unheated buffer uses correct fij', () => {
@@ -182,14 +183,14 @@ describe('physics: complete box room', () => {
   //   Total wall area = 2×9.5 + 2×7.0 = 33.0 m²
   //
   // Te = −12 °C, Ti = 20 °C → ΔT = 32 K
-  //   Q_T_walls = 33.0 × 0.25 × 1.0 × 32           =  264.0 W
-  //   Q_T_floor = 12.0 × 0.25 × 0.45 × 32  (ground) =   43.2 W
-  //   Q_T_ceil  = 12.0 × 0.20 × 1.0 × 32  (exterior)=   76.8 W
-  //   Q_T = 384.0 W
-  //   Q_V = 0.34 × (12 × 2.5) × 0.5 × 32            =  163.2 W
-  //   Q_HL = 547.2 W
+  //   Q_T_walls = 33.0 × 0.25 × 1.0 × 32                         = 264.0 W
+  //   Q_T_floor = 12.0 × 0.25 × (10/32) × 32  (ground, Tg=10°C) =  30.0 W
+  //   Q_T_ceil  = 12.0 × 0.20 × 1.0 × 32      (exterior)         =  76.8 W
+  //   Q_T = 370.8 W
+  //   Q_V = 0.34 × (12 × 2.5) × 0.5 × 32                         = 163.2 W
+  //   Q_HL = 534.0 W
 
-  it('Q_T = 384 W, Q_V = 163.2 W, Q_HL = 547.2 W', () => {
+  it('Q_T = 370.8 W, Q_V = 163.2 W, Q_HL = 534.0 W', () => {
     const T = 200; // wall thickness mm
     const walls: WallSegment[] = [
       makeWall('wT', { start: {x:    0, y:    0}, end: {x: 4000, y:    0}, thickness: T, uValue: 0.25, boundaryCategory: 'exterior' }),
@@ -206,11 +207,11 @@ describe('physics: complete box room', () => {
       minAirChanges: 0.5,
     });
     const floor = makeFloor(walls, [room]);
-    const result = calculateRoomHeizlast(room, floor, -12, [room]);
+    const result = calculateRoomHeizlast(room, floor, -12, [room], 10);
 
-    expect(result.transmissionLoss).toBeCloseTo(384.0, 1);
+    expect(result.transmissionLoss).toBeCloseTo(370.8, 1);
     expect(result.ventilationLoss).toBeCloseTo(163.2, 1);
-    expect(result.totalLoss).toBeCloseTo(547.2, 1);
+    expect(result.totalLoss).toBeCloseTo(534.0, 1);
   });
 });
 
@@ -317,17 +318,18 @@ describe('physics: two-room building total via calculateHeizlast', () => {
   //
   // Te = −12 °C, Ti = 20 °C → ΔT = 32 K, nMin = 0.5 h⁻¹
   //
+  // Tg = 10°C (project default), fij_ground = (20-10)/32 = 10/32
   // Room A:
-  //   Q_T = 12.5×0.25×32 + 20×0.25×0.45×32 + 20×0.20×32 = 100 + 72 + 128 = 300 W
-  //   Q_V = 0.34 × (20 × 2.5) × 0.5 × 32 = 272 W  →  Q_A = 572 W
+  //   Q_T = 12.5×0.25×32 + 20×0.25×(10/32)×32 + 20×0.20×32 = 100 + 50 + 128 = 278 W
+  //   Q_V = 0.34 × (20 × 2.5) × 0.5 × 32 = 272 W  →  Q_A = 550 W
   //
   // Room B:
-  //   Q_T = 12.5×0.25×32 + 15×0.25×0.45×32 + 15×0.20×32 = 100 + 54 + 96 = 250 W
-  //   Q_V = 0.34 × (15 × 2.5) × 0.5 × 32 = 204 W  →  Q_B = 454 W
+  //   Q_T = 12.5×0.25×32 + 15×0.25×(10/32)×32 + 15×0.20×32 = 100 + 37.5 + 96 = 233.5 W
+  //   Q_V = 0.34 × (15 × 2.5) × 0.5 × 32 = 204 W  →  Q_B = 437.5 W
   //
-  // Building total = 572 + 454 = 1026 W
+  // Building total = 550 + 437.5 = 987.5 W
 
-  it('building total Q_HL = 1026 W', () => {
+  it('building total Q_HL = 987.5 W', () => {
     const extA    = makeWall('wA', { start: {x:     0, y:     0}, end: {x: 5000, y:     0}, uValue: 0.25, boundaryCategory: 'exterior' });
     const extB    = makeWall('wB', { start: {x:     0, y: 10000}, end: {x: 5000, y: 10000}, uValue: 0.25, boundaryCategory: 'exterior' });
     const shared  = makeWall('wS', { start: {x:     0, y:  5000}, end: {x: 5000, y:  5000}, uValue: 0.50, boundaryCategory: 'adj_heated' });
@@ -354,8 +356,8 @@ describe('physics: two-room building total via calculateHeizlast', () => {
     };
 
     const result = calculateHeizlast(project);
-    expect(result.buildingTotal).toBeCloseTo(1026, 1);
-    expect(result.designHeatLoad).toBeCloseTo(1026, 1);
+    expect(result.buildingTotal).toBeCloseTo(987.5, 1);
+    expect(result.designHeatLoad).toBeCloseTo(987.5, 1);
   });
 });
 

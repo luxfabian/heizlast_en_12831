@@ -2,8 +2,6 @@ import type { Editor } from '../editor/editorState.js';
 import { WALL_PRESETS, WINDOW_PRESETS, DOOR_PRESETS, GARAGE_PRESETS, FLOOR_PRESETS } from '../library/presets.js';
 import type { WallTypePreset, OpeningTypePreset, CeilingTypePreset } from '../library/presets.js';
 import { loadCustomPresets, addCustomWallPreset, addCustomOpeningPreset, addCustomFloorPreset, removeCustomPreset } from '../library/customPresets.js';
-import { getBoundaryCategoryColor } from '../editor/adjacency.js';
-import type { BoundaryCategory } from '../model/types.js';
 import { v4 as uuidv4 } from '../utils/uuid.js';
 
 // Persistent collapsed-state (survives panel re-renders which happen on every mouse move)
@@ -159,7 +157,7 @@ export function renderLibraryPanel(container: HTMLElement, editor: Editor): void
     floorBody.appendChild(makePresetRow(
       p.name,
       `U ${p.uValue.toFixed(2)}`,
-      getBoundaryCategoryColor(p.defaultCategory),
+      null,
       null,
       state.selectedLibraryItemId === p.id,
       !!p.isCustom,
@@ -227,35 +225,14 @@ function openAddDialog(mode: AddMode, editor: Editor): void {
   fieldsEl.appendChild(makeDialogField('U-Wert (W/m²K)', uValInp));
 
   let thickInp: HTMLInputElement | null = null;
-  let catSel:   HTMLSelectElement | null = null;
   let widthInp: HTMLInputElement | null = null;
   let heightInp: HTMLInputElement | null = null;
 
-  if (mode === 'wall' || mode === 'floor') {
-    if (mode === 'wall') {
-      thickInp = makeDialogInput('Wanddicke (mm)', 'number', '300');
-      thickInp.min = '50'; thickInp.max = '1000';
-      fieldsEl.appendChild(makeDialogField('Wanddicke (mm)', thickInp));
-    } else {
-      // floor preset — category is intrinsic to the floor type
-      catSel = document.createElement('select');
-      catSel.className = 'input';
-      const cats: [BoundaryCategory, string][] = [
-        ['ground',       'Erdreich'],
-        ['adj_heated',   'Beheizt (darüber)'],
-        ['exterior',     'Außenluft'],
-        ['unheated',     'Unbeheizt'],
-        ['adj_neighbor', 'Nachbargebäude'],
-      ];
-      for (const [v, l] of cats) {
-        const opt = document.createElement('option');
-        opt.value = v; opt.textContent = l;
-        catSel.appendChild(opt);
-      }
-      fieldsEl.appendChild(makeDialogField('Grenzkategorie', catSel));
-    }
-
-  } else {
+  if (mode === 'wall') {
+    thickInp = makeDialogInput('Wanddicke (mm)', 'number', '300');
+    thickInp.min = '50'; thickInp.max = '1000';
+    fieldsEl.appendChild(makeDialogField('Wanddicke (mm)', thickInp));
+  } else if (mode !== 'floor') {
     widthInp  = makeDialogInput('Breite (mm)', 'number', '1200');
     heightInp = makeDialogInput('Höhe (mm)', 'number', '1400');
     widthInp.min  = '100'; widthInp.max  = '10000';
@@ -278,8 +255,8 @@ function openAddDialog(mode: AddMode, editor: Editor): void {
       editor.setActiveWallPreset(id);
       editor.selectLibraryItem(id, 'wall');
 
-    } else if (mode === 'floor' && catSel) {
-      const preset: CeilingTypePreset = { id, name, uValue: uVal, defaultCategory: catSel.value as BoundaryCategory };
+    } else if (mode === 'floor') {
+      const preset: CeilingTypePreset = { id, name, uValue: uVal };
       addCustomFloorPreset(preset);
       editor.selectLibraryItem(id, 'floor');
 
