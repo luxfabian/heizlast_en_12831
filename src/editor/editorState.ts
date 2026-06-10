@@ -160,7 +160,7 @@ export class Editor {
 
   private rebuildRooms(): void {
     const detected = detectRooms(this.floor.walls);
-    const rooms = mergeDetectedRooms(detected, this.floor.rooms, this.floor.defaultCeilingHeight);
+    const rooms = mergeDetectedRooms(detected, this.floor.rooms, this.floor.defaultCeilingHeight, this.floor.level);
     this.project = this.replaceActiveFloor(updateAdjacency({ ...this.floor, rooms }));
   }
 

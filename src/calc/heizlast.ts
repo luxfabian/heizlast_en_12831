@@ -330,6 +330,19 @@ export function calculateHeizlast(project: Project): HeizlastResult {
     }
   }
 
+  // Rooms on level > 0 with no intersection partner still carry the 'ground' default
+  // from when they were created. That's physically impossible — correct to 'exterior'.
+  for (const upperFloor of sortedFloors) {
+    if (upperFloor.level <= 0) continue;
+    for (const upperRoom of upperFloor.rooms) {
+      if (augmentedFloors.has(upperRoom.id)) continue;
+      const floors = upperRoom.floors ?? [];
+      if (floors.length > 0 && floors.every(f => f.boundaryCategory === 'ground')) {
+        augmentedFloors.set(upperRoom.id, floors.map(f => ({ ...f, boundaryCategory: 'exterior' as BoundaryCategory })));
+      }
+    }
+  }
+
   const roomResults = sortedFloors.flatMap(floor =>
     floor.rooms.map(room => {
       const augRoom: Room = {

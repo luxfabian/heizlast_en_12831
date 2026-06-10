@@ -118,7 +118,8 @@ export function detectRooms(walls: WallSegment[]): DetectedRoom[] {
 export function mergeDetectedRooms(
   detected: DetectedRoom[],
   existingRooms: Room[],
-  defaultCeilingHeight: number
+  defaultCeilingHeight: number,
+  floorLevel = 0,
 ): Room[] {
   const updated: Room[] = [];
 
@@ -143,7 +144,7 @@ export function mergeDetectedRooms(
         wallIds: d.wallIds,
         designTemperature: 20,
         ceilingHeight: defaultCeilingHeight,
-        floors: [defaultFloor()],
+        floors: [floorLevel > 0 ? defaultUpperFloor() : defaultFloor()],
         ceilings: [defaultCeiling()],
         area: d.area,
       });
@@ -159,6 +160,10 @@ function defaultCeiling(): RoomCeiling {
 
 function defaultFloor(): RoomFloor {
   return { id: uuidv4(), uValue: 0.25, boundaryCategory: 'ground', typePresetId: 'floor_neubau' };
+}
+
+function defaultUpperFloor(): RoomFloor {
+  return { id: uuidv4(), uValue: 0.25, boundaryCategory: 'exterior', typePresetId: 'floor_ext' };
 }
 
 function migrateFloor(room: Room): RoomFloor {
