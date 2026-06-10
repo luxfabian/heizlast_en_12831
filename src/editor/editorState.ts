@@ -42,6 +42,7 @@ export interface EditorState {
   selectedFloorId?: string;
 
   showHeatMap: boolean;
+  showBoundaryLabels: boolean;
   heizlastResult?: HeizlastResult;
   activeToolCursor?: Point2D;
 
@@ -73,6 +74,7 @@ export function createEditorState(): EditorState {
     activeDoorPresetId:   DEFAULT_DOOR_PRESET_ID,
     activeGaragePresetId: DEFAULT_GARAGE_PRESET_ID,
     showHeatMap: false,
+    showBoundaryLabels: false,
     isPanning: false,
     spaceDown: false,
   };
@@ -120,11 +122,11 @@ export class Editor {
     return pt;
   }
 
-  private snap(worldPt: Point2D, drawStart?: Point2D): Point2D {
+  private snap(worldPt: Point2D, drawStart?: Point2D, exclude?: Point2D): Point2D {
     // Auto-ortho first (raw coords), then grid, then endpoint
     const ortho = drawStart ? this.autoOrthoSnap(worldPt, drawStart) : worldPt;
     const gridPt = this.state.gridEnabled ? snapPoint(ortho, this.state.gridSize) : ortho;
-    return snapToExistingEndpoint(gridPt, this.floor.walls, this.state.snapThreshold);
+    return snapToExistingEndpoint(gridPt, this.floor.walls, this.state.snapThreshold, exclude);
   }
 
   private replaceActiveFloor(updated: Floor): Project {
@@ -266,12 +268,14 @@ export class Editor {
     // Vertex drag
     if (this.state.draggingVertex) {
       const worldPt = canvasToWorld({ x: canvasX, y: canvasY }, this.state.viewport);
-      const rawSnapped = this.snap(worldPt);
       const { wallId, end } = this.state.draggingVertex;
       const wall = this.floor.walls.find(w => w.id === wallId)!;
 
-      // Also snap co-located vertices from other walls (shared endpoints)
+      // Exclude the dragged vertex itself so it doesn't snap back to its own position
       const movingPt = end === 'start' ? wall.start : wall.end;
+      const rawSnapped = this.snap(worldPt, undefined, movingPt);
+
+      // Also snap co-located vertices from other walls (shared endpoints)
       const updatedWalls = this.floor.walls.map(w => {
         const patchStart = pointsEqual(w.start, movingPt) ? rawSnapped : undefined;
         const patchEnd   = pointsEqual(w.end,   movingPt) ? rawSnapped : undefined;
@@ -453,7 +457,7 @@ export class Editor {
       thickness: preset?.thickness ?? 300,
       uValue:    preset?.uValue    ?? 0.20,
       typePresetId: this.state.activeWallPresetId,
-      boundaryCategory: preset?.defaultCategory ?? 'exterior',
+      boundaryCategory: 'exterior',
     };
     this.project = this.replaceActiveFloor({ ...this.floor, walls: [...this.floor.walls, newWall] });
     this.rebuildRooms();
@@ -520,6 +524,8 @@ export class Editor {
     this.state.selectedOpeningId = openingId;
     this.notifyRender();
   }
+
+  setShowBoundaryLabels(show: boolean): void { this.state.showBoundaryLabels = show; this.notify(); }
 
   setActiveWallPreset(id: string): void { this.state.activeWallPresetId = id; this.notify(); }
   setActiveOpeningPreset(type: 'window' | 'door' | 'garage_door', id: string): void {
@@ -712,6 +718,7 @@ export class Editor {
       drawStart:           this.state.drawStart,
       previewEnd:          this.state.activeToolCursor,
       showHeatMap:         this.state.showHeatMap,
+      showBoundaryLabels:  this.state.showBoundaryLabels,
       gridEnabled:         this.state.gridEnabled,
       heizlastResult:      this.state.heizlastResult,
       tool:                this.state.tool,

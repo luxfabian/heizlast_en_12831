@@ -111,7 +111,7 @@ export function renderLibraryPanel(container: HTMLElement, editor: Editor): void
     wallBody.appendChild(makePresetRow(
       p.name,
       `U ${p.uValue.toFixed(2)} · ${p.thickness} mm`,
-      getBoundaryCategoryColor(p.defaultCategory),
+      null,
       null,
       state.activeWallPresetId === p.id,
       !!p.isCustom,
@@ -232,36 +232,28 @@ function openAddDialog(mode: AddMode, editor: Editor): void {
   let heightInp: HTMLInputElement | null = null;
 
   if (mode === 'wall' || mode === 'floor') {
-    const defaultThick = mode === 'wall' ? '300' : undefined;
     if (mode === 'wall') {
-      thickInp = makeDialogInput('Wanddicke (mm)', 'number', defaultThick!);
+      thickInp = makeDialogInput('Wanddicke (mm)', 'number', '300');
       thickInp.min = '50'; thickInp.max = '1000';
       fieldsEl.appendChild(makeDialogField('Wanddicke (mm)', thickInp));
+    } else {
+      // floor preset — category is intrinsic to the floor type
+      catSel = document.createElement('select');
+      catSel.className = 'input';
+      const cats: [BoundaryCategory, string][] = [
+        ['ground',       'Erdreich'],
+        ['adj_heated',   'Beheizt (darüber)'],
+        ['exterior',     'Außenluft'],
+        ['unheated',     'Unbeheizt'],
+        ['adj_neighbor', 'Nachbargebäude'],
+      ];
+      for (const [v, l] of cats) {
+        const opt = document.createElement('option');
+        opt.value = v; opt.textContent = l;
+        catSel.appendChild(opt);
+      }
+      fieldsEl.appendChild(makeDialogField('Grenzkategorie', catSel));
     }
-
-    catSel = document.createElement('select');
-    catSel.className = 'input';
-    const cats: [BoundaryCategory, string][] = mode === 'wall'
-      ? [
-          ['exterior',     'Außenwand'],
-          ['adj_heated',   'Innenwand'],
-          ['ground',       'Erdreich'],
-          ['unheated',     'Unbeheizt'],
-          ['adj_neighbor', 'Nachbargebäude'],
-        ]
-      : [
-          ['ground',       'Erdreich'],
-          ['adj_heated',   'Beheizt (darüber)'],
-          ['exterior',     'Außenluft'],
-          ['unheated',     'Unbeheizt'],
-          ['adj_neighbor', 'Nachbargebäude'],
-        ];
-    for (const [v, l] of cats) {
-      const opt = document.createElement('option');
-      opt.value = v; opt.textContent = l;
-      catSel.appendChild(opt);
-    }
-    fieldsEl.appendChild(makeDialogField('Grenzkategorie', catSel));
 
   } else {
     widthInp  = makeDialogInput('Breite (mm)', 'number', '1200');
@@ -277,11 +269,10 @@ function openAddDialog(mode: AddMode, editor: Editor): void {
     const uVal = Math.max(0.05, Math.min(5, Number(uValInp.value) || 0.20));
     const id = `custom_${uuidv4().slice(0, 8)}`;
 
-    if (mode === 'wall' && thickInp && catSel) {
+    if (mode === 'wall' && thickInp) {
       const preset: WallTypePreset = {
         id, name, description: name, uValue: uVal,
         thickness: Math.max(50, Number(thickInp.value) || 300),
-        defaultCategory: catSel.value as BoundaryCategory,
       };
       addCustomWallPreset(preset);
       editor.setActiveWallPreset(id);

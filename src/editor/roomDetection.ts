@@ -184,14 +184,17 @@ export function getAllEndpoints(walls: WallSegment[]): Point2D[] {
   return pts;
 }
 
-/** Snap a new point to an existing endpoint if within threshold mm */
+/** Snap a new point to an existing endpoint if within threshold mm.
+ *  Pass `exclude` to skip the vertex currently being dragged (avoids self-snap). */
 export function snapToExistingEndpoint(
   p: Point2D,
   walls: WallSegment[],
-  thresholdMm: number
+  thresholdMm: number,
+  exclude?: Point2D,
 ): Point2D {
   const eps = getAllEndpoints(walls);
   for (const ep of eps) {
+    if (exclude && Math.abs(ep.x - exclude.x) < 1 && Math.abs(ep.y - exclude.y) < 1) continue;
     const dx = p.x - ep.x, dy = p.y - ep.y;
     if (Math.sqrt(dx * dx + dy * dy) <= thresholdMm) return ep;
   }

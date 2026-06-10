@@ -13,7 +13,6 @@ export interface WallTypePreset {
   description: string;
   uValue: number;    // W/m²K
   thickness: number; // mm
-  defaultCategory: BoundaryCategory;
 }
 
 export interface OpeningTypePreset {
@@ -35,22 +34,22 @@ export interface OpeningTypePreset {
 
 export const WALL_PRESETS: WallTypePreset[] = [
   // ── New construction: energy efficiency standards ──────────────────────────
-  { id: 'aw_kfw40',      name: 'AW KfW 40',       description: 'KfW Effizienzhaus 40',          uValue: 0.15, thickness: 380, defaultCategory: 'exterior' },
-  { id: 'aw_kfw55',      name: 'AW KfW 55',       description: 'KfW Effizienzhaus 55',          uValue: 0.20, thickness: 320, defaultCategory: 'exterior' },
-  { id: 'aw_neubau',     name: 'AW GEG 2024',     description: 'GEG 2023 Mindestanforderung',   uValue: 0.28, thickness: 250, defaultCategory: 'exterior' },
+  { id: 'aw_kfw40',      name: 'AW KfW 40',       description: 'KfW Effizienzhaus 40',          uValue: 0.15, thickness: 380 },
+  { id: 'aw_kfw55',      name: 'AW KfW 55',       description: 'KfW Effizienzhaus 55',          uValue: 0.20, thickness: 320 },
+  { id: 'aw_neubau',     name: 'AW GEG 2024',     description: 'GEG 2023 Mindestanforderung',   uValue: 0.28, thickness: 250 },
   // ── Existing building stock: TABULA Germany typical values ─────────────────
-  { id: 'aw_2002_2015',  name: 'AW 2002–2015',    description: 'EnEV 2002, TABULA DE typisch',  uValue: 0.35, thickness: 240, defaultCategory: 'exterior' },
-  { id: 'aw_1995_2001',  name: 'AW 1995–2001',    description: 'WSchV 1995, TABULA DE typisch', uValue: 0.45, thickness: 240, defaultCategory: 'exterior' },
-  { id: 'aw_1984_1994',  name: 'AW 1984–1994',    description: 'WSchV 1984, TABULA DE typisch', uValue: 0.60, thickness: 240, defaultCategory: 'exterior' },
-  { id: 'aw_altbau',     name: 'AW 1969–1983',    description: 'WSchV 1977, TABULA DE typisch', uValue: 0.90, thickness: 300, defaultCategory: 'exterior' },
-  { id: 'aw_1958_1968',  name: 'AW 1958–1968',    description: 'TABULA DE typisch',             uValue: 1.10, thickness: 360, defaultCategory: 'exterior' },
-  { id: 'aw_vor1958',    name: 'AW vor 1958',     description: 'Massivbau, TABULA DE typisch',  uValue: 1.40, thickness: 380, defaultCategory: 'exterior' },
+  { id: 'aw_2002_2015',  name: 'AW 2002–2015',    description: 'EnEV 2002, TABULA DE typisch',  uValue: 0.35, thickness: 240 },
+  { id: 'aw_1995_2001',  name: 'AW 1995–2001',    description: 'WSchV 1995, TABULA DE typisch', uValue: 0.45, thickness: 240 },
+  { id: 'aw_1984_1994',  name: 'AW 1984–1994',    description: 'WSchV 1984, TABULA DE typisch', uValue: 0.60, thickness: 240 },
+  { id: 'aw_altbau',     name: 'AW 1969–1983',    description: 'WSchV 1977, TABULA DE typisch', uValue: 0.90, thickness: 300 },
+  { id: 'aw_1958_1968',  name: 'AW 1958–1968',    description: 'TABULA DE typisch',             uValue: 1.10, thickness: 360 },
+  { id: 'aw_vor1958',    name: 'AW vor 1958',     description: 'Massivbau, TABULA DE typisch',  uValue: 1.40, thickness: 380 },
   // ── Interior walls ─────────────────────────────────────────────────────────
-  { id: 'iw_massiv',     name: 'IW Massiv',       description: 'Kalksandstein 17,5 cm',         uValue: 1.20, thickness: 175, defaultCategory: 'adj_heated' },
-  { id: 'iw_std',        name: 'IW Standard',     description: 'Kalksandstein 11,5 cm',         uValue: 2.00, thickness: 115, defaultCategory: 'adj_heated' },
-  { id: 'iw_leicht',     name: 'IW Leicht',       description: 'Leichtbauwand 8 cm',            uValue: 2.50, thickness:  80, defaultCategory: 'adj_heated' },
+  { id: 'iw_massiv',     name: 'IW Massiv',       description: 'Kalksandstein 17,5 cm',         uValue: 1.20, thickness: 175 },
+  { id: 'iw_std',        name: 'IW Standard',     description: 'Kalksandstein 11,5 cm',         uValue: 2.00, thickness: 115 },
+  { id: 'iw_leicht',     name: 'IW Leicht',       description: 'Leichtbauwand 8 cm',            uValue: 2.50, thickness:  80 },
   // ── Basement / ground-contact walls ────────────────────────────────────────
-  { id: 'keller',        name: 'KW Keller',       description: 'Betonwand Erdreich, unsaniert', uValue: 0.50, thickness: 300, defaultCategory: 'ground' },
+  { id: 'keller',        name: 'KW Keller',       description: 'Betonwand Erdreich, unsaniert', uValue: 0.50, thickness: 300 },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────

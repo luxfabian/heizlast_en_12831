@@ -539,13 +539,6 @@ function makeCeilingCard(
 
 // ---- Library item panel ----
 
-const WALL_CAT_OPTIONS: [BoundaryCategory, string][] = [
-  ['exterior',     'Außenwand'],
-  ['adj_heated',   'Innenwand'],
-  ['ground',       'Erdreich'],
-  ['unheated',     'Unbeheizt'],
-  ['adj_neighbor', 'Nachbargebäude'],
-];
 const FLOOR_CAT_OPTIONS: [BoundaryCategory, string][] = [
   ['ground',       'Erdreich'],
   ['adj_heated',   'Beheizt (darüber)'],
@@ -575,17 +568,10 @@ function renderLibraryItemPanel(
     const nameInp = el('input', { type: 'text', class: 'input', value: preset.name }) as HTMLInputElement;
     const uInp    = el('input', { type: 'number', class: 'input', min: '0.05', max: '5', step: '0.01', value: String(preset.uValue) }) as HTMLInputElement;
     const thkInp  = el('input', { type: 'number', class: 'input', min: '50', max: '1000', step: '10', value: String(preset.thickness) }) as HTMLInputElement;
-    const catSel  = el('select', { class: 'input' }) as HTMLSelectElement;
-    for (const [v, l] of WALL_CAT_OPTIONS) {
-      const opt = el('option', { value: v }, l) as HTMLOptionElement;
-      if (v === preset.defaultCategory) opt.selected = true;
-      catSel.appendChild(opt);
-    }
 
     sec.appendChild(field('Name', nameInp));
     sec.appendChild(field('U-Wert (W/m²K)', uInp));
     sec.appendChild(field('Dicke (mm)', thkInp));
-    sec.appendChild(field('Grenzkategorie', catSel));
 
     const saveBtn = el('button', { class: 'btn btn-primary btn-sm', style: 'margin-top:8px' }, 'Speichern');
     saveBtn.addEventListener('click', () => {
@@ -595,7 +581,6 @@ function renderLibraryItemPanel(
         id, name: nameInp.value.trim() || preset.name,
         description: nameInp.value.trim() || preset.name,
         uValue: uVal, thickness: thk,
-        defaultCategory: catSel.value as BoundaryCategory,
       };
       addCustomWallPreset(p);
       editor.syncPresetToProject(id, uVal, thk);
@@ -775,10 +760,7 @@ function renderWallPanel(container: HTMLElement, wall: WallSegment, editor: Edit
     }
     const p = allWallPresets.find(pr => pr.id === presetSel.value);
     if (!p) return;
-    const patch = isInterior
-      ? { typePresetId: p.id, uValue: p.uValue, thickness: p.thickness }
-      : { typePresetId: p.id, uValue: p.uValue, thickness: p.thickness, boundaryCategory: p.defaultCategory };
-    editor.updateWall(wall.id, patch);
+    editor.updateWall(wall.id, { typePresetId: p.id, uValue: p.uValue, thickness: p.thickness });
   });
   sec.appendChild(field('Wandtyp', presetSel));
 

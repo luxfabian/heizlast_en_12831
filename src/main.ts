@@ -251,6 +251,14 @@ document.getElementById('calc-btn')?.addEventListener('click', () => {
   resultsBench.classList.remove('collapsed');
 });
 
+// Boundary labels toggle
+const boundaryToggle = document.getElementById('boundary-toggle') as HTMLButtonElement;
+boundaryToggle?.addEventListener('click', () => {
+  const v = !editor.getState().showBoundaryLabels;
+  editor.setShowBoundaryLabels(v);
+  boundaryToggle.classList.toggle('active', v);
+});
+
 // Heatmap toggle
 const hmToggle = document.getElementById('heatmap-toggle') as HTMLButtonElement;
 hmToggle?.addEventListener('click', () => {

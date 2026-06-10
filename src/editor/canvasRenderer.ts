@@ -39,6 +39,7 @@ export interface RenderState {
   previewEnd?: Point2D;
   heizlastResult?: HeizlastResult;
   showHeatMap: boolean;
+  showBoundaryLabels: boolean;
   gridEnabled: boolean;
   tool: ToolMode;
 }
@@ -477,16 +478,18 @@ function drawWallsAndOpenings(ctx: CanvasRenderingContext2D, floor: Floor, vp: V
 
     // Both labels drawn in canvas space so text is always horizontal and
     // the two labels are always on opposite sides of the wall.
-    if (isSelected || isDragging) {
+    if (isSelected || isDragging || state.showBoundaryLabels) {
       const midX = (cs.x + ce.x) / 2;
       const midY = (cs.y + ce.y) / 2;
       // Adjacency badge: above the wall midpoint in screen space
       if (!isDragging) {
         drawAdjacencyBadge(ctx, midX, midY - halfT - 14, wall.boundaryCategory);
       }
-      // Dimension label: below the wall midpoint in screen space
-      const lenM = (wallLenW / 1000).toFixed(2);
-      drawDimLabelLocal(ctx, midX, midY + halfT + 12, `${lenM} m`);
+      // Dimension label: below only for selected / dragging (not global label mode)
+      if (isSelected || isDragging) {
+        const lenM = (wallLenW / 1000).toFixed(2);
+        drawDimLabelLocal(ctx, midX, midY + halfT + 12, `${lenM} m`);
+      }
     }
 
     // Endpoint drag handles
