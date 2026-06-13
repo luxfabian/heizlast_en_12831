@@ -97,9 +97,9 @@ export function renderProjectPanel(container: HTMLElement, project: Project, edi
   const gainsWarn = document.createElement('span');
   gainsWarn.className = 'proj-gains-warning';
   gainsWarn.title = 'Weicht von DIN EN 12831 vereinfachter Methode ab. Interne Wärmeflüsse von wärmeren Nachbarräumen werden als Gewinne angerechnet — beeinflusst Raumheizlasten, nicht die Gebäude-Gesamtheizlast.';
-  gainsWarn.textContent = '⚠ Abweichung von Norm';
+  gainsWarn.textContent = ' ⚠ ';
   gainsWrap.appendChild(gainsWarn);
-  addRow(grid, 'Wärmegewinne (Nachbar)', gainsWrap);
+  addRow(grid, 'Wärmegewinne', gainsWrap);
 
   // ── Heated area (read-only) ──
   const floor = project.floors[0];
@@ -107,7 +107,7 @@ export function renderProjectPanel(container: HTMLElement, project: Project, edi
   const areaSpan = document.createElement('span');
   areaSpan.className = 'proj-value';
   areaSpan.textContent = `${totalArea.toFixed(1)} m²`;
-  addRow(grid, 'Fläche (beheizt)', areaSpan);
+  addRow(grid, 'Fläche', areaSpan);
 
   container.appendChild(grid);
 }
