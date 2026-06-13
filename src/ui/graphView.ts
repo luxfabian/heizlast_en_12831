@@ -121,7 +121,7 @@ export function renderGraph(
   // ── Physics ───────────────────────────────────────────────────────────────
 
   const REPULSION      = 32000;
-  const SPRING_K       = 0.18;
+  const SPRING_K       = 0.05;
   const GRAVITY        = 0.04;
   const DAMPING_SETTLE = 0.78;
   const maxFlow = Math.max(...edges.map(e => e.flow), 1);
@@ -426,7 +426,7 @@ export function renderGraph(
   function startAnim(): void {
     stopAnim();
     function tick(): void {
-      forceStep(4, 0.65);
+      forceStep(4, 0.15);
       draw();
       const ke = vx.reduce((s, v) => s + v * v, 0) + vy.reduce((s, v) => s + v * v, 0);
       if (ke > 0.05) rafId = requestAnimationFrame(tick);
