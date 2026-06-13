@@ -64,12 +64,12 @@ export function renderGraph(
     });
   }
 
-  const roomNodes = result.rooms.filter(rr => rr.result.totalLoss > 0);
-  const maxHL = Math.max(...roomNodes.map(rr => rr.result.totalLoss), 1);
+  const roomNodes = result.rooms;
+  const maxHL = Math.max(...roomNodes.map(rr => Math.abs(rr.result.totalLoss)), 1);
   const MIN_R = 13, MAX_R = 28;
 
   roomNodes.forEach((rr, i) => {
-    const frac  = rr.result.totalLoss / maxHL;
+    const frac  = Math.abs(rr.result.totalLoss) / maxHL;
     const r     = MIN_R + (MAX_R - MIN_R) * Math.sqrt(frac);
     const angle = (2 * Math.PI * i / Math.max(roomNodes.length, 1)) - Math.PI / 2;
     nodeIdx.set(rr.roomId, nodes.length);
@@ -95,10 +95,8 @@ export function renderGraph(
     if (nbr > 1) edges.push({ fromId: rr.roomId, toId: 'env:neighbor', flow: nbr, color: C_NEIGHBOR });
   }
 
-  const adjMap      = new Map<string, GEdge>();
-  const adjPairSeen = new Set<string>(); // canonical sorted pair key
+  const adjMap = new Map<string, GEdge>();
 
-  // Pass 1 — edges with real heat flow (walls, floors, ceilings that actually lose heat)
   for (const rr of result.rooms) {
     for (const el of rr.result.elementBreakdown) {
       if (el.heatLoss <= 0.5 || !el.adjacentRoomId) continue;
@@ -112,26 +110,9 @@ export function renderGraph(
           color: el.boundaryCategory === 'adj_reduced' ? C_ADJ_REDUCED : C_ADJ_HEATED,
         });
       }
-      adjPairSeen.add([rr.roomId, el.adjacentRoomId].sort().join('|'));
     }
   }
 
-  // Pass 2 — floor/ceiling topology: add a zero-flow edge for inter-floor pairs
-  // not already covered by pass 1 (i.e. adj_heated rooms at the same temperature)
-  for (const rr of result.rooms) {
-    for (const el of rr.result.elementBreakdown) {
-      if (!el.adjacentRoomId) continue;
-      if (el.elementType !== 'floor' && el.elementType !== 'ceiling') continue;
-      if (el.boundaryCategory !== 'adj_heated' && el.boundaryCategory !== 'adj_reduced') continue;
-      const pairKey = [rr.roomId, el.adjacentRoomId].sort().join('|');
-      if (adjPairSeen.has(pairKey)) continue;
-      adjPairSeen.add(pairKey);
-      adjMap.set(`${rr.roomId}→${el.adjacentRoomId}`, {
-        fromId: rr.roomId, toId: el.adjacentRoomId, flow: 0,
-        color: C_ADJ_HEATED,
-      });
-    }
-  }
 
   for (const e of adjMap.values()) {
     if (nodeIdx.has(e.fromId) && nodeIdx.has(e.toId)) edges.push(e);

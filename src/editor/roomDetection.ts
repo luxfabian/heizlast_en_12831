@@ -47,6 +47,27 @@ export function detectRooms(walls: WallSegment[]): DetectedRoom[] {
     edgeWallMap.set(`${ek}>${sk}`, wall.id);
   }
 
+  // Prune degree-1 (leaf) vertices — spur/peninsula walls whose endpoint connects
+  // to nothing else. Face traversal would U-turn through them, producing duplicate
+  // wall IDs in the result. Remove iteratively because pruning can create new leaves.
+  {
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const [vKey, neighbors] of adjList) {
+        if (neighbors.length !== 1) continue;
+        const nKey = neighbors[0];
+        adjList.delete(vKey);
+        vertexPoints.delete(vKey);
+        const nNbs = adjList.get(nKey);
+        if (nNbs) { const i = nNbs.indexOf(vKey); if (i >= 0) nNbs.splice(i, 1); }
+        edgeWallMap.delete(`${vKey}>${nKey}`);
+        edgeWallMap.delete(`${nKey}>${vKey}`);
+        changed = true;
+      }
+    }
+  }
+
   // Sort each vertex's neighbors CCW by polar angle
   for (const [vKey, neighbors] of adjList) {
     const vp = vertexPoints.get(vKey)!;
@@ -126,7 +147,13 @@ export function mergeDetectedRooms(
   for (const d of detected) {
     const wallSetKey = [...d.wallIds].sort().join('|');
     const existing = existingRooms.find(r => {
-      return [...r.wallIds].sort().join('|') === wallSetKey;
+      if ([...r.wallIds].sort().join('|') === wallSetKey) return true;
+      // Fallback: existing room may have spur walls (duplicate IDs) from old project data.
+      // Remove duplicate-ID walls to get the pruned set and compare against detected.
+      const counts = new Map<string, number>();
+      for (const id of r.wallIds) counts.set(id, (counts.get(id) ?? 0) + 1);
+      const pruned = [...new Set(r.wallIds.filter(id => counts.get(id) === 1))].sort().join('|');
+      return pruned === wallSetKey;
     });
 
     if (existing) {
@@ -136,7 +163,8 @@ export function mergeDetectedRooms(
       const floors: RoomFloor[] = existing.floors?.length > 0
         ? existing.floors
         : [migrateFloor(existing)];
-      updated.push({ ...existing, ceilings, floors, area: d.area });
+      // Always use the detected (pruned) wallIds so old spur data is cleaned up.
+      updated.push({ ...existing, wallIds: d.wallIds, ceilings, floors, area: d.area });
     } else {
       updated.push({
         id: uuidv4(),

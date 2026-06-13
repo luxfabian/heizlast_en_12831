@@ -74,21 +74,21 @@ function wallNetAreaM2(wall: WallSegment, ceilingHeightMm: number, openings: Ope
   return Math.max(0, gross - openArea);
 }
 
-function getAdjacentRoomTemp(wall: WallSegment, currentRoomId: string, rooms: Room[]): number | undefined {
-  // Primary: find a room OTHER than current that shares this wall in its boundary.
-  // This is robust regardless of what adjacentRoomId was stored.
-  const bySharing = rooms.find(r => r.id !== currentRoomId && r.wallIds.includes(wall.id));
+// Wall adjacency must be restricted to the same floor — adjacentRoomId stored on walls can
+// be stale (e.g. from older project data) and might point to rooms on a different floor,
+// which would create physically impossible cross-floor wall connections.
+function getAdjacentRoomTemp(wall: WallSegment, currentRoomId: string, sameFloorRooms: Room[]): number | undefined {
+  const bySharing = sameFloorRooms.find(r => r.id !== currentRoomId && r.wallIds.includes(wall.id));
   if (bySharing) return bySharing.designTemperature;
-  // Fallback: explicit adjacentRoomId (for manually-set adjacency)
   if (!wall.adjacentRoomId || wall.adjacentRoomId === currentRoomId) return undefined;
-  return rooms.find(r => r.id === wall.adjacentRoomId)?.designTemperature;
+  return sameFloorRooms.find(r => r.id === wall.adjacentRoomId)?.designTemperature;
 }
 
-function getAdjacentRoomId(wall: WallSegment, currentRoomId: string, rooms: Room[]): string | undefined {
-  const bySharing = rooms.find(r => r.id !== currentRoomId && r.wallIds.includes(wall.id));
+function getAdjacentRoomId(wall: WallSegment, currentRoomId: string, sameFloorRooms: Room[]): string | undefined {
+  const bySharing = sameFloorRooms.find(r => r.id !== currentRoomId && r.wallIds.includes(wall.id));
   if (bySharing) return bySharing.id;
   if (!wall.adjacentRoomId || wall.adjacentRoomId === currentRoomId) return undefined;
-  return rooms.find(r => r.id === wall.adjacentRoomId) ? wall.adjacentRoomId : undefined;
+  return sameFloorRooms.find(r => r.id === wall.adjacentRoomId) ? wall.adjacentRoomId : undefined;
 }
 
 export function calculateRoomHeizlast(
@@ -107,14 +107,14 @@ export function calculateRoomHeizlast(
     if (!wall) continue;
 
     const category = wall.boundaryCategory;
-    const tAdj     = getAdjacentRoomTemp(wall, room.id, allRooms) ?? tE;
+    const tAdj     = getAdjacentRoomTemp(wall, room.id, floor.rooms) ?? tE;
     const fij      = computeFij({ tInt, tAdj, tE, category, unheatedSpaceTemp: wall.unheatedSpaceTemp, tGround, allowHeatGains });
     const actualDeltaT = fij * (tInt - tE);
 
     const netArea  = wallNetAreaM2(wall, room.ceilingHeight, floor.openings, floor);
     const heatLoss = netArea * wall.uValue * fij * (tInt - tE);
     const adjRoomId = (category === 'adj_heated' || category === 'adj_reduced')
-      ? getAdjacentRoomId(wall, room.id, allRooms) : undefined;
+      ? getAdjacentRoomId(wall, room.id, floor.rooms) : undefined;
     breakdown.push({ elementId: wall.id, elementType: 'wall', boundaryCategory: category, area: netArea, uValue: wall.uValue, fij, actualDeltaT, heatLoss, adjacentRoomId: adjRoomId });
 
     for (const op of getWallOpenings(wall.id, floor.openings)) {
@@ -191,7 +191,14 @@ export function calculateRoomHeizlast(
 
 export function getRoomPolygon(room: Room, floor: Floor): Point2D[] | null {
   const wm = new Map(floor.walls.map(w => [w.id, w]));
-  const walls = room.wallIds.map(id => wm.get(id)).filter(Boolean) as WallSegment[];
+  // Walls appearing more than once are peninsula/spur walls (same room on both sides).
+  // Remove all their occurrences — they are interior features, not boundary segments.
+  const counts = new Map<string, number>();
+  for (const id of room.wallIds) counts.set(id, (counts.get(id) ?? 0) + 1);
+  const walls = room.wallIds
+    .filter(id => counts.get(id) === 1)
+    .map(id => wm.get(id))
+    .filter(Boolean) as WallSegment[];
   if (walls.length < 3) return null;
   const n = walls.length;
   const pts: Point2D[] = [];
@@ -268,10 +275,56 @@ function shoelaceArea(pts: Point2D[]): number {
   return area / 2;
 }
 
-export function polygonIntersectionArea(subject: Point2D[], clip: Point2D[]): number {
-  const result = sutherlandHodgman(subject, clip);
-  if (result.length < 3) return 0;
-  return Math.abs(shoelaceArea(result));
+/** Ear-clip triangulation of a simple polygon. Returns CCW triangles. */
+function triangulate(poly: Point2D[]): [Point2D, Point2D, Point2D][] {
+  const n = poly.length;
+  if (n < 3) return [];
+  // Normalise to CCW (shoelaceArea > 0 = CCW in standard maths coords)
+  const pts = shoelaceArea(poly) >= 0 ? [...poly] : [...poly].reverse();
+  const result: [Point2D, Point2D, Point2D][] = [];
+  const rem = [...pts];
+  while (rem.length > 3) {
+    let clipped = false;
+    for (let i = 0; i < rem.length && !clipped; i++) {
+      const a = rem[(i - 1 + rem.length) % rem.length];
+      const b = rem[i];
+      const c = rem[(i + 1) % rem.length];
+      // b is reflex if the local triangle is CW or degenerate
+      if (edgeSide(c, a, b) <= 0) continue;
+      // No other vertex strictly inside triangle (a, b, c)
+      const ai = (i - 1 + rem.length) % rem.length;
+      const ci = (i + 1) % rem.length;
+      let ear = true;
+      for (let j = 0; j < rem.length && ear; j++) {
+        if (j === ai || j === i || j === ci) continue;
+        const p = rem[j];
+        if (edgeSide(p, a, b) > 0 && edgeSide(p, b, c) > 0 && edgeSide(p, c, a) > 0) ear = false;
+      }
+      if (ear) { result.push([a, b, c]); rem.splice(i, 1); clipped = true; }
+    }
+    if (!clipped) break; // degenerate polygon
+  }
+  if (rem.length >= 3) result.push([rem[0], rem[1], rem[2]]);
+  return result;
+}
+
+/**
+ * Area of intersection of two simple polygons (mm² when inputs are in mm).
+ * Uses ear-clip triangulation so neither polygon needs to be convex.
+ */
+export function polygonIntersectionArea(a: Point2D[], b: Point2D[]): number {
+  const trisA = triangulate(a);
+  const trisB = triangulate(b);
+  let total = 0;
+  for (const ta of trisA) {
+    if (Math.abs(shoelaceArea(ta)) < 1) continue; // skip degenerate (zero-area) triangles
+    for (const tb of trisB) {
+      if (Math.abs(shoelaceArea(tb)) < 1) continue; // degenerate clip ⇒ S-H clips nothing
+      const inter = sutherlandHodgman(ta, tb); // triangles are always convex
+      if (inter.length >= 3) total += Math.abs(shoelaceArea(inter));
+    }
+  }
+  return total;
 }
 
 export function calculateHeizlast(project: Project): HeizlastResult {
@@ -302,7 +355,7 @@ export function calculateHeizlast(project: Project): HeizlastResult {
       for (const upperRoom of upperFloor.rooms) {
         const upperPoly = getRoomPolygon(upperRoom, upperFloor);
         if (!upperPoly) continue;
-        const intersectionMm2 = polygonIntersectionArea(upperPoly, lowerPoly);
+        const intersectionMm2 = polygonIntersectionArea(lowerPoly, upperPoly);
         const intersectionM2  = intersectionMm2 / 1_000_000;
         if (intersectionM2 < 0.01) continue;
 
