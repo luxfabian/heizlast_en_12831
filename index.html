@@ -44,6 +44,7 @@
         <div class="toolbar-group">
           <button class="btn btn-tab active" id="view-plan-btn" title="Grundriss (CAD-Ansicht)">Grundriss</button>
           <button class="btn btn-tab" id="view-sankey-btn" title="Sankey-Diagramm der Heizlastverteilung" disabled>Sankey</button>
+          <button class="btn btn-tab" id="view-graph-btn" title="Wärmefluss-Netzwerk (Raumgraph)" disabled>Netzwerk</button>
         </div>
 
         <div class="toolbar-sep"></div>
@@ -213,6 +214,9 @@
 
         <!-- Sankey full view (shown instead of canvas when tab is active) -->
         <div id="sankey-view" style="display:none"></div>
+
+        <!-- Network graph view -->
+        <div id="graph-view" style="display:none"></div>
 
         <!-- Sidebar -->
         <div id="sidebar">

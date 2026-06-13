@@ -84,6 +84,13 @@ function getAdjacentRoomTemp(wall: WallSegment, currentRoomId: string, rooms: Ro
   return rooms.find(r => r.id === wall.adjacentRoomId)?.designTemperature;
 }
 
+function getAdjacentRoomId(wall: WallSegment, currentRoomId: string, rooms: Room[]): string | undefined {
+  const bySharing = rooms.find(r => r.id !== currentRoomId && r.wallIds.includes(wall.id));
+  if (bySharing) return bySharing.id;
+  if (!wall.adjacentRoomId || wall.adjacentRoomId === currentRoomId) return undefined;
+  return rooms.find(r => r.id === wall.adjacentRoomId) ? wall.adjacentRoomId : undefined;
+}
+
 export function calculateRoomHeizlast(
   room: Room,
   floor: Floor,
@@ -106,12 +113,14 @@ export function calculateRoomHeizlast(
 
     const netArea  = wallNetAreaM2(wall, room.ceilingHeight, floor.openings, floor);
     const heatLoss = netArea * wall.uValue * fij * (tInt - tE);
-    breakdown.push({ elementId: wall.id, elementType: 'wall', boundaryCategory: category, area: netArea, uValue: wall.uValue, fij, actualDeltaT, heatLoss });
+    const adjRoomId = (category === 'adj_heated' || category === 'adj_reduced')
+      ? getAdjacentRoomId(wall, room.id, allRooms) : undefined;
+    breakdown.push({ elementId: wall.id, elementType: 'wall', boundaryCategory: category, area: netArea, uValue: wall.uValue, fij, actualDeltaT, heatLoss, adjacentRoomId: adjRoomId });
 
     for (const op of getWallOpenings(wall.id, floor.openings)) {
       const area     = openingAreaM2(op);
       const heatLoss = area * op.uValue * fij * (tInt - tE);
-      breakdown.push({ elementId: op.id, elementType: op.type, boundaryCategory: category, area, uValue: op.uValue, fij, actualDeltaT, heatLoss });
+      breakdown.push({ elementId: op.id, elementType: op.type, boundaryCategory: category, area, uValue: op.uValue, fij, actualDeltaT, heatLoss, adjacentRoomId: adjRoomId });
     }
   }
 
@@ -139,6 +148,8 @@ export function calculateRoomHeizlast(
         area, uValue: flr.uValue, fij: floorFij,
         actualDeltaT: floorFij * (tInt - tE),
         heatLoss: area * flr.uValue * floorFij * (tInt - tE),
+        adjacentRoomId: (flr.boundaryCategory === 'adj_heated' || flr.boundaryCategory === 'adj_reduced')
+          ? flr.adjacentRoomId : undefined,
       });
     }
 
@@ -162,6 +173,8 @@ export function calculateRoomHeizlast(
         boundaryCategory: ceil.boundaryCategory,
         area, uValue: ceil.uValue, fij, actualDeltaT,
         heatLoss: area * ceil.uValue * fij * (tInt - tE),
+        adjacentRoomId: (ceil.boundaryCategory === 'adj_heated' || ceil.boundaryCategory === 'adj_reduced')
+          ? ceil.adjacentRoomId : undefined,
       });
     }
   }

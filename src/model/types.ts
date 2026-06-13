@@ -122,8 +122,9 @@ export interface ElementHeatLoss {
   area: number;    // m²
   uValue: number;  // W/m²K
   fij: number;
-  actualDeltaT: number; // K
-  heatLoss: number;     // W
+  actualDeltaT: number;    // K
+  heatLoss: number;        // W
+  adjacentRoomId?: string; // set for adj_heated / adj_reduced elements
 }
 
 export interface RoomHeizlastResult {
