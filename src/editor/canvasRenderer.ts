@@ -730,8 +730,12 @@ function drawRoomLabels(ctx: CanvasRenderingContext2D, floor: Floor, vp: Viewpor
       font:  `${isSelected ? 'bold ' : ''}12px "Inter", system-ui, sans-serif`,
       color: isSelected ? ROOM_LABEL_SEL : ROOM_LABEL,
     });
+    const isUnheated = room.roomType === 'unheated';
+    const tempText = isUnheated
+      ? (rr ? `≈${rr.result.effectiveTemperature.toFixed(1)} °C` : '—')
+      : `${room.designTemperature} °C`;
     lines.push({
-      text:  `${room.designTemperature} °C`,
+      text:  tempText,
       font:  '9px "Courier New", monospace',
       color: 'rgba(148,163,184,0.7)',
     });
