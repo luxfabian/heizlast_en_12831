@@ -121,9 +121,25 @@ function renderRoomPanel(
   labelInp.addEventListener('change', () => editor.updateRoom(room.id, { label: labelInp.value }));
   sec.appendChild(field('Bezeichnung', labelInp));
 
-  const tempInp = numInput(room.designTemperature, -20, 30);
-  tempInp.addEventListener('change', () => editor.updateRoom(room.id, { designTemperature: Number(tempInp.value) }));
-  sec.appendChild(field('Raumtemperatur θint (°C)', tempInp));
+  const roomTypeSel = el('select', { class: 'select' }) as HTMLSelectElement;
+  const currentRoomType = room.roomType ?? ((room as any).isHeated === false ? 'reduced' : 'heated');
+  ([['heated', 'Beheizt'], ['reduced', 'Reduziert'], ['unheated', 'Unbeheizt']] as [string, string][]).forEach(([v, lbl]) => {
+    const opt = el('option', { value: v }, lbl);
+    if (v === currentRoomType) opt.selected = true;
+    roomTypeSel.appendChild(opt);
+  });
+  roomTypeSel.addEventListener('change', () =>
+    editor.updateRoom(room.id, { roomType: roomTypeSel.value as 'heated' | 'reduced' | 'unheated' }));
+  sec.appendChild(field('Raumtyp', roomTypeSel));
+
+  if (currentRoomType === 'unheated') {
+    const info = el('div', { class: 'panel-info' }, 'Raumtemperatur wird als Gleichgewichtstemperatur berechnet');
+    sec.appendChild(info);
+  } else {
+    const tempInp = numInput(room.designTemperature, -20, 30);
+    tempInp.addEventListener('change', () => editor.updateRoom(room.id, { designTemperature: Number(tempInp.value) }));
+    sec.appendChild(field('Raumtemperatur θint (°C)', tempInp));
+  }
 
   const heightInp = numInput(room.ceilingHeight, 1000, 6000);
   heightInp.addEventListener('change', () => editor.updateRoom(room.id, { ceilingHeight: Number(heightInp.value) }));

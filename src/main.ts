@@ -9,6 +9,7 @@ import { renderRoomPanel } from './ui/roomPanel.js';
 import { renderProjectPanel } from './ui/projectPanel.js';
 import { renderResultsBench, renderSankey } from './ui/resultsPanel.js';
 import { renderGraph } from './ui/graphView.js';
+import { renderReport } from './ui/reportView.js';
 import { calculateHeizlast } from './calc/heizlast.js';
 import { exportPdf } from './ui/pdfExport.js';
 import type { Project, Room } from './model/types.js';
@@ -139,46 +140,46 @@ function refreshSidebar(): void {
 refreshSidebar();
 
 // ---- Results bench ----
-const resultsBench   = document.getElementById('results-bench')!;
-const rbDetail       = document.getElementById('results-bench-detail')!;
-const rbTotal        = document.getElementById('rb-total')!;
-const rbSpecific     = document.getElementById('rb-specific')!;
-const rbStrip        = document.getElementById('rb-roomstrip')!;
-const rbExpandBtn    = document.getElementById('rb-expand-btn')!;
-
-rbExpandBtn.addEventListener('click', () => {
-  resultsBench.classList.toggle('collapsed');
-});
+const resultsBench = document.getElementById('results-bench')!;
+const rbTotal      = document.getElementById('rb-total')!;
+const rbSpecific   = document.getElementById('rb-specific')!;
+const rbStrip      = document.getElementById('rb-roomstrip')!;
 
 function refreshResultsBench(): void {
   const state = editor.getState();
   if (state.heizlastResult) {
-    renderResultsBench(resultsBench, rbDetail, rbTotal, rbSpecific, rbStrip,
-      state.heizlastResult, editor.getProject() as Project, editor);
+    renderResultsBench(resultsBench, rbTotal, rbSpecific, rbStrip, state.heizlastResult);
     if (sankeyView.style.display !== 'none') {
       renderSankey(sankeyView, state.heizlastResult, editor.getProject() as Project);
     }
     if (graphView.style.display !== 'none') {
       renderGraph(graphView, state.heizlastResult, editor.getProject() as Project);
     }
+    if (reportView.style.display !== 'none') {
+      renderReport(reportView, state.heizlastResult, editor.getProject() as Project, editor);
+    }
   }
 }
 
-// ---- View tabs: Grundriss / Sankey / Netzwerk ----
+// ---- View tabs: Grundriss / Sankey / Netzwerk / Report ----
 const canvasContainer = document.getElementById('canvas-container')!;
 const sankeyView      = document.getElementById('sankey-view')!;
 const graphView       = document.getElementById('graph-view')!;
+const reportView      = document.getElementById('report-view')!;
 const viewPlanBtn     = document.getElementById('view-plan-btn')!;
 const viewSankeyBtn   = document.getElementById('view-sankey-btn')!;
 const viewGraphBtn    = document.getElementById('view-graph-btn')!;
+const viewReportBtn   = document.getElementById('view-report-btn')!;
 
-function activateView(view: 'plan' | 'sankey' | 'graph'): void {
+function activateView(view: 'plan' | 'sankey' | 'graph' | 'report'): void {
   canvasContainer.style.display = 'none';
   sankeyView.style.display      = 'none';
   graphView.style.display       = 'none';
+  reportView.style.display      = 'none';
   viewPlanBtn.classList.remove('active');
   viewSankeyBtn.classList.remove('active');
   viewGraphBtn.classList.remove('active');
+  viewReportBtn.classList.remove('active');
 
   const state = editor.getState();
   if (view === 'plan') {
@@ -189,16 +190,21 @@ function activateView(view: 'plan' | 'sankey' | 'graph'): void {
     sankeyView.style.display = 'flex';
     viewSankeyBtn.classList.add('active');
     if (state.heizlastResult) renderSankey(sankeyView, state.heizlastResult, editor.getProject() as Project);
-  } else {
+  } else if (view === 'graph') {
     graphView.style.display = 'flex';
     viewGraphBtn.classList.add('active');
     if (state.heizlastResult) renderGraph(graphView, state.heizlastResult, editor.getProject() as Project);
+  } else {
+    reportView.style.display = 'flex';
+    viewReportBtn.classList.add('active');
+    if (state.heizlastResult) renderReport(reportView, state.heizlastResult, editor.getProject() as Project, editor);
   }
 }
 
 viewPlanBtn.addEventListener('click',   () => activateView('plan'));
 viewSankeyBtn.addEventListener('click', () => activateView('sankey'));
 viewGraphBtn.addEventListener('click',  () => activateView('graph'));
+viewReportBtn.addEventListener('click', () => activateView('report'));
 
 // ---- Toolbar tools ----
 function activateTool(tool: ToolMode): void {
@@ -220,8 +226,9 @@ document.getElementById('new-btn')?.addEventListener('click', () => {
   if (!confirm('Aktuelles Projekt verwerfen und neu beginnen?')) return;
   clearProject();
   editor.resetProject();
-  resultsBench.classList.add('collapsed');
   viewSankeyBtn.setAttribute('disabled', '');
+  viewGraphBtn.setAttribute('disabled', '');
+  viewReportBtn.setAttribute('disabled', '');
   activateView('plan');
   activateTool('select');
 });
@@ -259,8 +266,7 @@ document.getElementById('calc-btn')?.addEventListener('click', () => {
   // Enable result tabs now that results are available
   viewSankeyBtn.removeAttribute('disabled');
   viewGraphBtn.removeAttribute('disabled');
-  // Expand the bench to show results
-  resultsBench.classList.remove('collapsed');
+  viewReportBtn.removeAttribute('disabled');
 });
 
 // Boundary labels toggle

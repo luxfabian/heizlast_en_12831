@@ -45,6 +45,7 @@
           <button class="btn btn-tab active" id="view-plan-btn" title="Grundriss (CAD-Ansicht)">Grundriss</button>
           <button class="btn btn-tab" id="view-sankey-btn" title="Sankey-Diagramm der Heizlastverteilung" disabled>Sankey</button>
           <button class="btn btn-tab" id="view-graph-btn" title="Wärmefluss-Netzwerk (Raumgraph)" disabled>Netzwerk</button>
+          <button class="btn btn-tab" id="view-report-btn" title="Detaillierter Ergebnisbericht" disabled>Report</button>
         </div>
 
         <div class="toolbar-sep"></div>
@@ -218,6 +219,9 @@
         <!-- Network graph view -->
         <div id="graph-view" style="display:none"></div>
 
+        <!-- Report view -->
+        <div id="report-view" style="display:none"></div>
+
         <!-- Sidebar -->
         <div id="sidebar">
           <div id="sidebar-scroll">
@@ -228,16 +232,14 @@
       </div><!-- /main -->
 
       <!-- ══════════════════════════════ RESULTS BENCH ══════════════════════════════ -->
-      <div id="results-bench" class="collapsed">
+      <div id="results-bench">
         <div id="results-bench-bar">
           <span class="rb-label">Heizlast</span>
           <span id="rb-total">—</span>
           <span id="rb-specific"></span>
           <span id="rb-energy" class="rb-energy-badge"></span>
           <div id="rb-roomstrip"></div>
-          <button id="rb-expand-btn" title="Ergebnisse ein/ausklappen">▾</button>
         </div>
-        <div id="results-bench-detail"></div>
       </div>
 
       <!-- ══════════════════════════════ STATUS BAR ══════════════════════════════ -->

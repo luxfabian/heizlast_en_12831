@@ -9,6 +9,118 @@ const DEFAULT_MIN_AIR_CHANGES = 0.5;
 const DEFAULT_U_FLOOR         = 0.25; // W/m²K
 const DEFAULT_U_CEILING       = 0.20; // W/m²K — fallback for rooms without ceilings array
 
+/** Canonical room type, migrating legacy isHeated boolean */
+function effectiveRoomType(room: Room): 'heated' | 'reduced' | 'unheated' {
+  if (room.roomType) return room.roomType;
+  if ((room as any).isHeated === false) return 'reduced';
+  return 'heated';
+}
+
+/** Temperature on the other side of a wall for a non-modelled-room boundary */
+function adjTempFromWall(wall: WallSegment, tE: number, tGround: number): number {
+  switch (wall.boundaryCategory) {
+    case 'exterior':     return tE;
+    case 'ground':       return tGround;
+    case 'unheated':     return wall.unheatedSpaceTemp ?? tE;
+    case 'adj_neighbor': return wall.unheatedSpaceTemp ?? 15;
+    case 'adj_heated':
+    case 'adj_reduced':  return tE; // fallback — adjacentRoomId lookup done separately
+  }
+}
+
+/** Temperature on the other side of a floor/ceiling surface */
+function adjTempFromSurface(
+  s: ThermalSurface, temps: Map<string, number>, tE: number, tGround: number,
+): number {
+  switch (s.boundaryCategory) {
+    case 'adj_heated':
+    case 'adj_reduced':  return s.adjacentRoomId ? (temps.get(s.adjacentRoomId) ?? tE) : tE;
+    case 'exterior':     return tE;
+    case 'ground':       return tGround;
+    case 'unheated':     return s.unheatedSpaceTemp ?? tE;
+    case 'adj_neighbor': return s.unheatedSpaceTemp ?? 15;
+  }
+}
+
+/**
+ * Iterative (Gauss-Seidel) solver for the equilibrium temperatures of unheated rooms.
+ * Solves θ_eq = Σ(Ui·Ai·θi) / Σ(Ui·Ai) for each unheated room simultaneously.
+ */
+function solveEquilibriumTemps(
+  unheatedRooms: { room: Room; floor: Floor }[],
+  augmentedCeilings: Map<string, ThermalSurface[]>,
+  augmentedFloors: Map<string, ThermalSurface[]>,
+  allRooms: Room[],
+  tE: number,
+  tGround: number,
+): Map<string, number> {
+  // Start: all rooms at design temp; unheated at tE as initial guess
+  const temps = new Map<string, number>(allRooms.map(r => [r.id, r.designTemperature]));
+  for (const { room } of unheatedRooms) temps.set(room.id, tE);
+
+  for (let iter = 0; iter < 50; iter++) {
+    let maxChange = 0;
+    for (const { room, floor } of unheatedRooms) {
+      let uaSum  = 0;
+      let uaTSum = 0;
+
+      // Walls and openings
+      for (const wallId of room.wallIds) {
+        const wall = floor.walls.find(w => w.id === wallId);
+        if (!wall) continue;
+        const adjRoom = floor.rooms.find(r => r.id !== room.id && r.wallIds.includes(wall.id));
+        const tAdj = adjRoom ? (temps.get(adjRoom.id) ?? tE) : adjTempFromWall(wall, tE, tGround);
+        const netArea = wallNetAreaM2(wall, room.ceilingHeight, floor.openings, floor);
+        uaSum  += wall.uValue * netArea;
+        uaTSum += wall.uValue * netArea * tAdj;
+        for (const op of getWallOpenings(wall.id, floor.openings)) {
+          const area = openingAreaM2(op);
+          uaSum  += op.uValue * area;
+          uaTSum += op.uValue * area * tAdj;
+        }
+      }
+
+      // Floor surfaces
+      const floorSurfs = augmentedFloors.get(room.id) ?? (room.floors?.length > 0 ? room.floors : [
+        { id: 'fb', uValue: DEFAULT_U_FLOOR, boundaryCategory: 'ground' as BoundaryCategory },
+      ]);
+      for (const flr of floorSurfs) {
+        const area = flr.areaOverride ?? (room.area ?? 0);
+        if (area <= 0) continue;
+        const tAdj = adjTempFromSurface(flr, temps, tE, tGround);
+        uaSum  += flr.uValue * area;
+        uaTSum += flr.uValue * area * tAdj;
+      }
+
+      // Ceiling surfaces
+      const ceilSurfs = augmentedCeilings.get(room.id) ?? (room.ceilings?.length > 0 ? room.ceilings : [
+        { id: 'cb', uValue: DEFAULT_U_CEILING, boundaryCategory: 'exterior' as BoundaryCategory },
+      ]);
+      for (const ceil of ceilSurfs) {
+        const area = ceil.areaOverride ?? (room.area ?? 0);
+        if (area <= 0) continue;
+        const tAdj = adjTempFromSurface(ceil, temps, tE, tGround);
+        uaSum  += ceil.uValue * area;
+        uaTSum += ceil.uValue * area * tAdj;
+      }
+
+      // Infiltration / ventilation — always connected to exterior
+      const vol = room.volumeOverride ?? ((room.area ?? 0) * room.ceilingHeight / 1000);
+      const uaVent = 0.34 * vol * (room.minAirChanges ?? DEFAULT_MIN_AIR_CHANGES);
+      uaSum  += uaVent;
+      uaTSum += uaVent * tE;
+
+      const newTemp  = uaSum > 0 ? uaTSum / uaSum : tE;
+      const change   = Math.abs(newTemp - (temps.get(room.id) ?? tE));
+      maxChange      = Math.max(maxChange, change);
+      temps.set(room.id, newTemp);
+    }
+    if (maxChange < 0.01) break;
+  }
+
+  return temps;
+}
+
 /** Temperature correction factor per DIN EN 12831 §6.3.1.2 */
 export function computeFij(params: {
   tInt: number;
@@ -184,7 +296,7 @@ export function calculateRoomHeizlast(
   const nMin             = room.minAirChanges ?? DEFAULT_MIN_AIR_CHANGES;
   const ventilationLoss  = 0.34 * volumeM3 * nMin * (tInt - tE);
 
-  return { transmissionLoss, ventilationLoss, totalLoss: transmissionLoss + ventilationLoss, volume: volumeM3, nMin, elementBreakdown: breakdown };
+  return { transmissionLoss, ventilationLoss, totalLoss: transmissionLoss + ventilationLoss, volume: volumeM3, nMin, effectiveTemperature: tInt, elementBreakdown: breakdown };
 }
 
 // ---- Room polygon extraction (exported for UI use) ----
@@ -350,7 +462,7 @@ export function calculateHeizlast(project: Project): HeizlastResult {
       const lowerPoly = getRoomPolygon(lowerRoom, lowerFloor);
       if (!lowerPoly) continue;
 
-      const ceilLinks: { roomId: string; area: number; temp: number; flrU: number }[] = [];
+      const ceilLinks: { roomId: string; area: number; temp: number; flrU: number; roomType: 'heated' | 'reduced' | 'unheated' }[] = [];
 
       for (const upperRoom of upperFloor.rooms) {
         const upperPoly = getRoomPolygon(upperRoom, upperFloor);
@@ -361,11 +473,11 @@ export function calculateHeizlast(project: Project): HeizlastResult {
 
         // The upper room owns the slab — its floor U-value is the single source of truth.
         const flrU = upperRoom.floors?.[0]?.uValue ?? DEFAULT_U_FLOOR;
-        ceilLinks.push({ roomId: upperRoom.id, area: intersectionM2, temp: upperRoom.designTemperature, flrU });
+        ceilLinks.push({ roomId: upperRoom.id, area: intersectionM2, temp: upperRoom.designTemperature, flrU, roomType: effectiveRoomType(upperRoom) });
 
-        // Upper room: auto floor element toward lower room
+        // Upper room: auto floor element toward lower room.
         if (!augmentedFloors.has(upperRoom.id)) augmentedFloors.set(upperRoom.id, []);
-        const flrCat: BoundaryCategory = Math.abs(upperRoom.designTemperature - lowerRoom.designTemperature) <= 4 ? 'adj_heated' : 'adj_reduced';
+        const flrCat: BoundaryCategory = effectiveRoomType(lowerRoom) === 'heated' ? 'adj_heated' : 'adj_reduced';
         augmentedFloors.get(upperRoom.id)!.push({
           id: `${upperRoom.id}_autofloor_${lowerRoom.id}`,
           uValue: flrU,
@@ -378,7 +490,7 @@ export function calculateHeizlast(project: Project): HeizlastResult {
       if (ceilLinks.length > 0) {
         // Each ceiling slice inherits the U-value from the upper room's floor (same slab, one U-value).
         const ceilEntries: ThermalSurface[] = ceilLinks.map(link => {
-          const cat: BoundaryCategory = Math.abs(lowerRoom.designTemperature - link.temp) <= 4 ? 'adj_heated' : 'adj_reduced';
+          const cat: BoundaryCategory = link.roomType === 'heated' ? 'adj_heated' : 'adj_reduced';
           return { id: `${lowerRoom.id}_autoceil_${link.roomId}`, uValue: link.flrU, boundaryCategory: cat, adjacentRoomId: link.roomId, areaOverride: link.area };
         });
         // Residual ceiling area (not covered by any room above) → use user config or exterior.
@@ -415,14 +527,34 @@ export function calculateHeizlast(project: Project): HeizlastResult {
     }
   }
 
-  const roomResults = sortedFloors.flatMap(floor =>
+  // Solve equilibrium temperatures for unheated rooms before the main calculation
+  const unheatedRoomsWithFloor = sortedFloors.flatMap(fl =>
+    fl.rooms.filter(r => effectiveRoomType(r) === 'unheated').map(r => ({ room: r, floor: fl })),
+  );
+  const equilibriumTemps = unheatedRoomsWithFloor.length > 0
+    ? solveEquilibriumTemps(unheatedRoomsWithFloor, augmentedCeilings, augmentedFloors, allRooms, tE, tGround)
+    : null;
+
+  // Augment unheated rooms with their computed equilibrium temperature so that
+  // calculateRoomHeizlast and same-floor adjacency lookups use the correct value.
+  function augmentTemp(r: Room): Room {
+    if (!equilibriumTemps) return r;
+    const eq = equilibriumTemps.get(r.id);
+    return effectiveRoomType(r) === 'unheated' && eq !== undefined ? { ...r, designTemperature: eq } : r;
+  }
+  const augmentedAllRooms = allRooms.map(augmentTemp);
+  const augmentedSortedFloors = sortedFloors.map(fl => ({
+    ...fl, rooms: fl.rooms.map(augmentTemp),
+  }));
+
+  const roomResults = augmentedSortedFloors.flatMap(floor =>
     floor.rooms.map(room => {
       const augRoom: Room = {
         ...room,
         ceilings: augmentedCeilings.get(room.id) ?? room.ceilings,
         floors:   augmentedFloors.get(room.id)   ?? room.floors,
       };
-      return { roomId: room.id, result: calculateRoomHeizlast(augRoom, floor, tE, allRooms, tGround, allowHeatGains) };
+      return { roomId: room.id, result: calculateRoomHeizlast(augRoom, floor, tE, augmentedAllRooms, tGround, allowHeatGains) };
     }),
   );
 

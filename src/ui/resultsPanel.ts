@@ -17,13 +17,10 @@ function energyLabel(wPerM2: number): { label: string; color: string } {
 
 export function renderResultsBench(
   bench: HTMLElement,
-  detailEl: HTMLElement,
   totalEl: HTMLElement,
   specificEl: HTMLElement,
   stripEl: HTMLElement,
   result: HeizlastResult,
-  project: Project,
-  editor: Editor,
 ): void {
   const kw = (result.designHeatLoad / 1000).toFixed(1);
   totalEl.textContent = `${kw} kW`;
@@ -68,7 +65,6 @@ export function renderResultsBench(
   wrap.appendChild(maxLbl);
   stripEl.appendChild(wrap);
 
-  renderDetailPanel(detailEl, result, project, editor);
   bench.classList.add('has-results');
 }
 
@@ -325,7 +321,7 @@ function renderTempChart(result: HeizlastResult, _project: Project): SVGSVGEleme
 
 // ---- Hull group editor ----
 
-function renderHullGroupEditor(
+export function renderHullGroupEditor(
   container: HTMLElement,
   project: Project,
   editor: Editor,

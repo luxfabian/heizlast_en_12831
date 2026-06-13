@@ -23,13 +23,14 @@ export function updateAdjacency(floor: Floor): Floor {
     const roomIds = wallRoomMap.get(wall.id) ?? [];
 
     if (roomIds.length === 2) {
-      // Both rooms are modelled — fij is always computed from their actual temperatures.
-      // Category is fixed to adj_heated; the adj_reduced distinction is meaningless here.
-      return {
-        ...wall,
-        boundaryCategory: 'adj_heated' as BoundaryCategory,
-        adjacentRoomId: roomIds[0],
-      };
+      // Both rooms are modelled. If either room is not fully heated, the shared
+      // boundary is adj_reduced; otherwise adj_heated.
+      const r0 = floor.rooms.find(r => r.id === roomIds[0]);
+      const r1 = floor.rooms.find(r => r.id === roomIds[1]);
+      const type0 = r0?.roomType ?? (r0?.isHeated === false ? 'reduced' : 'heated');
+      const type1 = r1?.roomType ?? (r1?.isHeated === false ? 'reduced' : 'heated');
+      const cat: BoundaryCategory = (type0 === 'heated' && type1 === 'heated') ? 'adj_heated' : 'adj_reduced';
+      return { ...wall, boundaryCategory: cat, adjacentRoomId: roomIds[0] };
     }
 
     if (roomIds.length === 1) {

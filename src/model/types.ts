@@ -74,6 +74,11 @@ export interface Room {
   /** m³ — manual volume override; required when surfaces produce irregular geometry */
   volumeOverride?: number;
   minAirChanges?: number;    // h⁻¹ override
+  /** 'heated' (default) = fully conditioned; 'reduced' = maintained at lower specified temp;
+   *  'unheated' = no heating — temperature floats to thermal equilibrium */
+  roomType?: 'heated' | 'reduced' | 'unheated';
+  /** @deprecated use roomType; kept for loading older project files */
+  isHeated?: boolean;
   area?: number;             // m², computed by room detection
   heizlastResult?: RoomHeizlastResult;
   // ── legacy fields (kept for migration from old saved projects) ──
@@ -128,11 +133,12 @@ export interface ElementHeatLoss {
 }
 
 export interface RoomHeizlastResult {
-  transmissionLoss: number; // W
-  ventilationLoss: number;  // W
-  totalLoss: number;        // W
-  volume: number;           // m³ (used for ventilation calculation)
-  nMin: number;             // h⁻¹ (applied air change rate)
+  transmissionLoss: number;   // W
+  ventilationLoss: number;    // W
+  totalLoss: number;          // W
+  volume: number;             // m³ (used for ventilation calculation)
+  nMin: number;               // h⁻¹ (applied air change rate)
+  effectiveTemperature: number; // °C — design temp for heated/reduced; equilibrium for unheated
   elementBreakdown: ElementHeatLoss[];
 }
 
