@@ -302,7 +302,7 @@ export function calculateHeizlast(project: Project): HeizlastResult {
       for (const upperRoom of upperFloor.rooms) {
         const upperPoly = getRoomPolygon(upperRoom, upperFloor);
         if (!upperPoly) continue;
-        const intersectionMm2 = polygonIntersectionArea(lowerPoly, upperPoly);
+        const intersectionMm2 = polygonIntersectionArea(upperPoly, lowerPoly);
         const intersectionM2  = intersectionMm2 / 1_000_000;
         if (intersectionM2 < 0.01) continue;
 

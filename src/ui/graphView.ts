@@ -95,7 +95,10 @@ export function renderGraph(
     if (nbr > 1) edges.push({ fromId: rr.roomId, toId: 'env:neighbor', flow: nbr, color: C_NEIGHBOR });
   }
 
-  const adjMap = new Map<string, GEdge>();
+  const adjMap      = new Map<string, GEdge>();
+  const adjPairSeen = new Set<string>(); // canonical sorted pair key
+
+  // Pass 1 — edges with real heat flow (walls, floors, ceilings that actually lose heat)
   for (const rr of result.rooms) {
     for (const el of rr.result.elementBreakdown) {
       if (el.heatLoss <= 0.5 || !el.adjacentRoomId) continue;
@@ -109,8 +112,27 @@ export function renderGraph(
           color: el.boundaryCategory === 'adj_reduced' ? C_ADJ_REDUCED : C_ADJ_HEATED,
         });
       }
+      adjPairSeen.add([rr.roomId, el.adjacentRoomId].sort().join('|'));
     }
   }
+
+  // Pass 2 — floor/ceiling topology: add a zero-flow edge for inter-floor pairs
+  // not already covered by pass 1 (i.e. adj_heated rooms at the same temperature)
+  for (const rr of result.rooms) {
+    for (const el of rr.result.elementBreakdown) {
+      if (!el.adjacentRoomId) continue;
+      if (el.elementType !== 'floor' && el.elementType !== 'ceiling') continue;
+      if (el.boundaryCategory !== 'adj_heated' && el.boundaryCategory !== 'adj_reduced') continue;
+      const pairKey = [rr.roomId, el.adjacentRoomId].sort().join('|');
+      if (adjPairSeen.has(pairKey)) continue;
+      adjPairSeen.add(pairKey);
+      adjMap.set(`${rr.roomId}→${el.adjacentRoomId}`, {
+        fromId: rr.roomId, toId: el.adjacentRoomId, flow: 0,
+        color: C_ADJ_HEATED,
+      });
+    }
+  }
+
   for (const e of adjMap.values()) {
     if (nodeIdx.has(e.fromId) && nodeIdx.has(e.toId)) edges.push(e);
   }
