@@ -16,7 +16,8 @@ export function exportPdf(project: Project, result: HeizlastResult): void {
   const date = new Date().toLocaleDateString('de-DE');
 
   let y = 0;
-  const needY = (mm: number) => { if (y + mm > BOTTOM_MARGIN) { doc.addPage(); y = 15; } };
+  let sankeyPageNum = 0;
+  const needY = (mm: number) => { if (y + mm > BOTTOM_MARGIN) { doc.addPage('a4', 'p'); y = 15; } };
 
   // ═══════════════════════════════════════════════════════════════════════════
   // COVER HEADER
@@ -105,23 +106,67 @@ export function exportPdf(project: Project, result: HeizlastResult): void {
   tblRow(doc, LM, y, ['Gesamt  Q_{HL}', String(Math.round(result.designHeatLoad)), '100 %'], [...lossW], true);
   y += 12;
 
-  // ── Sankey chart ──────────────────────────────────────────────────────────
-  const sankeyH = 64;
-  needY(sankeyH + 14);
-  doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(40);
-  doc.text('Heizlastverteilung (Sankey)', LM, y);
-  y += 5;
-  drawSankey(doc, result, roomMap, LM, y, PW, sankeyH);
-  y += sankeyH + 10;
+  // ── Hull group summary ────────────────────────────────────────────────────
+  if (result.hullSummary.length > 0) {
+    needY(6 + result.hullSummary.length * 5 + 10);
+    doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(40);
+    doc.text('Hüllflächengruppen', LM, y);
+    y += 4;
+    const hw = [82, 30, 40, 28] as const;
+    tblHead(doc, LM, y, ['Hüllgruppe', 'A (m²)', 'Q_{T} (W)', 'Anteil'], [...hw]);
+    y += 6;
+    for (const he of result.hullSummary) {
+      needY(5);
+      tblRow(doc, LM, y, [
+        he.hullName,
+        he.totalArea.toFixed(1),
+        String(Math.round(he.totalTransmissionLoss)),
+        `${(he.shareOfBuildingTotal * 100).toFixed(0)} %`,
+      ], [...hw]);
+      y += 5;
+    }
+    y += 8;
+  }
+
+  // ── Definitions note ───────────────────────────────────────────────────────
+  needY(43);
+  doc.setFillColor(245, 247, 252);
+  doc.rect(LM, y, PW, 38, 'F');
+  doc.setFontSize(7.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(40, 50, 80);
+  doc.text('Definitionen', LM + 3, y + 5);
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(50);
+  const defLines = [
+    'Q_{HL} (Raum):    Heizlast Raum für Heizkörperauslegung = Q_{T} (alle Hüllflächen) + Q_{V}. Summe aller Räume kann > Gebäude-Q_{HL} sein.',
+    'Q_{HL} (Gebäude): Norm-Heizlast Gebäude = Q_{T,HL} + Q_{V}. Interne adj.-beheizt-Verluste heben sich auf Gebäudeebene auf.',
+    'Q_{T,HL}:         Heizlast-relevante Transmission — nur Außenluft, Erdreich, Nachbargebäude, Unbeheizt (keine adj. beheizten Räume).',
+    'Q_{T}:            Transmission alle Hüllflächen — inkl. Verluste zu adj. beheizten und adj. reduzierten Räumen.',
+    'Q_{V}:            Lüftungswärmeverlust = 0,34 × V × n_{min} × ΔT_{norm}',
+  ];
+  let dly = y + 11; for (const ln of defLines) { richText(doc, ln, LM + 3, dly, 7); dly += 5; }
+  doc.setTextColor(0);
+  y += 43;
+
+  // ── Sankey — dedicated landscape page ──────────────────────────────────────
+  doc.addPage('a4', 'l');
+  sankeyPageNum = (doc as unknown as { getNumberOfPages(): number }).getNumberOfPages();
+  const PW_L = 267; // 297 - LM - RM on landscape A4
+  y = 15;
+  sectionTitle(doc, LM, PW_L, y, '2   Heizlastverteilung (Sankey)');
+  y += 12;
+  drawSankey(doc, result, roomMap, LM, y, PW_L, 155);
+  y += 167;
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // SECTION 2 — ROOM OVERVIEW
+  // SECTION 3 — ROOM OVERVIEW
   // ═══════════════════════════════════════════════════════════════════════════
-  needY(32);
-  sectionTitle(doc, LM, PW, y, '2   Raumübersicht');
+  doc.addPage('a4', 'p');
+  y = 15;
+  sectionTitle(doc, LM, PW, y, '3   Raumübersicht');
   y += 12;
 
-  // Room overview: widths sum to 180 mm
+  // Room overview: Q_T = all-surface transmission (for radiator sizing).
+  // Q_{HL} = Q_T + Q_V = totalLoss — the correct per-room design heat load per DIN EN 12831.
+  // Note: Σ Q_{HL,Raum} ≥ building designHeatLoad because adj_heated losses cancel at building level.
   const rcw = [49, 19, 19, 23, 23, 25, 22] as const;
   tblHead(doc, LM, y, ['Raum', 'A (m²)', 'T_{i} (°C)', 'Q_{T} (W)', 'Q_{V} (W)', 'Q_{HL} (W)', 'q (W/m²)'], [...rcw]);
   y += 6;
@@ -156,17 +201,30 @@ export function exportPdf(project: Project, result: HeizlastResult): void {
     const a    = room?.area ?? 0;
     const ti   = room?.designTemperature ?? 20;
 
-    doc.addPage();
+    // Q_{T,HL}: heizlast-relevant transmission (exterior+ground+neighbor+unheated) — used in subtotal row
+    const extTrans = rr.result.elementBreakdown
+      .filter(e => e.boundaryCategory === 'exterior' || e.boundaryCategory === 'unheated' ||
+                   e.boundaryCategory === 'ground'   || e.boundaryCategory === 'adj_neighbor')
+      .reduce((s, e) => s + e.heatLoss, 0);
+
+    doc.addPage('a4', 'p');
     y = 15;
 
-    sectionTitle(doc, LM, PW, y, `3.${ri + 1}   ${room?.label ?? rr.roomId}  —  Elementaufschlüsselung`);
+    sectionTitle(doc, LM, PW, y, `4.${ri + 1}   ${room?.label ?? rr.roomId}  —  Elementaufschlüsselung`);
     y += 12;
 
-    // Room meta row
+    // Room meta — two lines so volume/air-change info fits
     doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(50);
     richText(doc,
       `Fläche: ${a.toFixed(1)} m²   |   T_{i} = ${ti} °C   |   ` +
-      `Q_{HL} = ${Math.round(rr.result.totalLoss)} W   |   Q_{T} = ${Math.round(rr.result.transmissionLoss)} W   |   Q_{V} = ${Math.round(rr.result.ventilationLoss)} W`,
+      `V = ${rr.result.volume.toFixed(1)} m³   |   n_{min} = ${rr.result.nMin.toFixed(2)} 1/h`,
+      LM, y, 8);
+    y += 5;
+    richText(doc,
+      `Q_{HL} = ${Math.round(rr.result.totalLoss)} W   |   ` +
+      `Q_{T,HL} = ${Math.round(extTrans)} W   |   ` +
+      `Q_{T} = ${Math.round(rr.result.transmissionLoss)} W   |   ` +
+      `Q_{V} = ${Math.round(rr.result.ventilationLoss)} W`,
       LM, y, 8);
     doc.setTextColor(0);
     y += 8;
@@ -184,7 +242,6 @@ export function exportPdf(project: Project, result: HeizlastResult): void {
                  e.elementType === 'door'        ? 'Tür'     :
                  e.elementType === 'garage_door' ? 'Tor'     :
                  e.elementType === 'floor'       ? 'Boden'   : 'Decke';
-      // Adjacent temperature: T_i minus effective dT
       const tadj = (ti - e.actualDeltaT).toFixed(0);
       tblRow(doc, LM, y, [
         tl,
@@ -198,9 +255,15 @@ export function exportPdf(project: Project, result: HeizlastResult): void {
       ], [...ecw]);
       y += 5;
     }
+    // Two-tier totals: Q_{T,HL} (heizlast-relevant, matches Q_{HL} in overview) vs Q_{T} (all surfaces)
     needY(5);
     tblRow(doc, LM, y,
-      ['Gesamt', '', '', '', '', '', 'Q_{T}:', String(Math.round(rr.result.transmissionLoss))],
+      ['', 'Außen / Boden / Nachbar', '', '', '', '', 'Q_{T,HL}:', String(Math.round(extTrans))],
+      [...ecw]);
+    y += 5;
+    needY(5);
+    tblRow(doc, LM, y,
+      ['Gesamt', 'alle Hüllflächen', '', '', '', '', 'Q_{T}:', String(Math.round(rr.result.transmissionLoss))],
       [...ecw], true);
     y += 12;
   }
@@ -208,7 +271,7 @@ export function exportPdf(project: Project, result: HeizlastResult): void {
   // ═══════════════════════════════════════════════════════════════════════════
   // SYMBOL TABLE
   // ═══════════════════════════════════════════════════════════════════════════
-  doc.addPage();
+  doc.addPage('a4', 'p');
   y = 15;
   sectionTitle(doc, LM, PW, y, 'Symbolverzeichnis');
   y += 12;
@@ -218,9 +281,11 @@ export function exportPdf(project: Project, result: HeizlastResult): void {
   y += 6;
 
   const symbols: [string, string, string][] = [
-    ['Q_{HL}',  'Heizlast (Norm-Gesamtheizlast)',                                              'W'],
-    ['Q_{T}',   'Transmissionswärmeverlust',                                                   'W'],
-    ['Q_{V}',   'Lüftungswärmeverlust',                                                        'W'],
+    ['Q_{HL,Raum}',  'Heizlast Raum für Heizkörperauslegung = Q_{T} (alle Hüll.) + Q_{V}',    'W'],
+    ['Q_{HL,Geb}',   'Norm-Heizlast Gebäude = Q_{T,HL} + Q_{V} (adj.-beheizt-Verluste kürzen sich heraus)', 'W'],
+    ['Q_{T,HL}',     'Heizlast-relevante Transmission: nur Außen, Erdreich, Nachbargebäude, Unbeheizt',      'W'],
+    ['Q_{T}',        'Transmissionswärmeverlust alle Hüllflächen (inkl. adj. beheizt/reduziert)',             'W'],
+    ['Q_{V}',        'Lüftungswärmeverlust',                                                                 'W'],
     ['q_{HL}',  'Spezifische Heizlast, bezogen auf beheizte Fläche',                         'W/m²'],
     ['U',       'Wärmedurchgangskoeffizient',                                                  'W/(m²K)'],
     ['A',       'Bauteilfläche (netto, nach Ecküberlappungskorrektur)',                        'm²'],
@@ -255,16 +320,19 @@ export function exportPdf(project: Project, result: HeizlastResult): void {
   const np = (doc as unknown as { getNumberOfPages(): number }).getNumberOfPages();
   for (let p = 1; p <= np; p++) {
     doc.setPage(p);
+    const isLandscape = p === sankeyPageNum;
+    const pH = isLandscape ? 210 : PAGE_H;  // physical page height (landscape A4 = 210 mm)
+    const pW = isLandscape ? 297 : 210;     // physical page width
     doc.setFillColor(20, 30, 50);
-    doc.rect(0, PAGE_H - 8, 210, 8, 'F');
+    doc.rect(0, pH - 8, pW, 8, 'F');
     doc.setTextColor(160, 170, 200);
     doc.setFontSize(7);
     doc.setFont('helvetica', 'normal');
     doc.text(
       'Vereinfachte Methode DIN EN 12831:2003 — ohne Wärmebrückenzuschläge',
-      LM, PAGE_H - 2.5,
+      LM, pH - 2.5,
     );
-    doc.text(`Seite ${p} / ${np}`, 210 - RM, PAGE_H - 2.5, { align: 'right' });
+    doc.text(`Seite ${p} / ${np}`, pW - RM, pH - 2.5, { align: 'right' });
     doc.setTextColor(0);
   }
 
@@ -363,27 +431,48 @@ function drawSankey(
   const LBX = x + LABEL_W;
   const RBX = x + w - BAR_W - RLABEL_W;
 
-  type CatNode = { label: string; value: number; r: number; g: number; b: number };
+  type CatNode = { key: string; label: string; value: number; r: number; g: number; b: number };
   const cats: CatNode[] = [];
   const { exterior, ground, adjNeighbor, ventilation } = result.lossByCategory;
-  if (exterior    > 0) cats.push({ label: 'Außenluft',   value: exterior,    r: 70,  g: 130, b: 210 });
-  if (ground      > 0) cats.push({ label: 'Erdreich',    value: ground,      r: 100, g: 165, b: 75  });
-  if (adjNeighbor > 0) cats.push({ label: 'Nachbargeb.', value: adjNeighbor, r: 210, g: 140, b: 40  });
-  if (ventilation > 0) cats.push({ label: 'Lüftung',     value: ventilation, r: 155, g: 90,  b: 210 });
+  if (exterior    > 0) cats.push({ key: 'exterior',    label: 'Außenluft',   value: exterior,    r: 70,  g: 130, b: 210 });
+  if (ground      > 0) cats.push({ key: 'ground',      label: 'Erdreich',    value: ground,      r: 100, g: 165, b: 75  });
+  if (adjNeighbor > 0) cats.push({ key: 'neighbor',    label: 'Nachbargeb.', value: adjNeighbor, r: 210, g: 140, b: 40  });
+  if (ventilation > 0) cats.push({ key: 'ventilation', label: 'Lüftung',     value: ventilation, r: 155, g: 90,  b: 210 });
 
-  const rooms = result.rooms.filter(rr => rr.result.totalLoss > 0);
+  // Per-room flow broken down by category — mirrors main app getRoomFlow.
+  // Only counts designHeatLoad categories (adj_heated excluded) so both sides balance.
+  const getRoomFlow = (rr: HeizlastResult['rooms'][0], key: string): number => {
+    const eb = rr.result.elementBreakdown;
+    if (key === 'exterior')    return eb.filter(e => e.boundaryCategory === 'exterior' || e.boundaryCategory === 'unheated').reduce((s, e) => s + e.heatLoss, 0);
+    if (key === 'ground')      return eb.filter(e => e.boundaryCategory === 'ground').reduce((s, e) => s + e.heatLoss, 0);
+    if (key === 'neighbor')    return eb.filter(e => e.boundaryCategory === 'adj_neighbor').reduce((s, e) => s + e.heatLoss, 0);
+    return rr.result.ventilationLoss;
+  };
+
+  const rooms = result.rooms
+    .map(rr => ({
+      rr,
+      room:  roomMap.get(rr.roomId),
+      flows: Object.fromEntries(cats.map(c => [c.key, getRoomFlow(rr, c.key)])),
+      total: cats.reduce((s, c) => s + getRoomFlow(rr, c.key), 0),
+    }))
+    .filter(r => r.total > 0);
+
   if (cats.length === 0 || rooms.length === 0) return;
 
+  // Single mm-per-watt scale: pick the tighter side so both left and right fit in h.
   const catAvailH  = h - (cats.length  - 1) * GAP;
   const roomAvailH = h - (rooms.length - 1) * GAP;
+  const mmPerW = Math.min(catAvailH / total, roomAvailH / total);
+  const barH   = (flow: number) => Math.max(0.5, flow * mmPerW);
 
-  const catBarH  = cats.map( c  => Math.max(0.5, (c.value              / total) * catAvailH));
-  const roomBarH = rooms.map(rr => Math.max(0.5, (rr.result.totalLoss / total) * roomAvailH));
+  const catBarH  = cats.map(c  => barH(c.value));
+  const roomBarH = rooms.map(r => barH(r.total));
 
   const catY  = bandStarts(catBarH,  GAP, y);
   const roomY = bandStarts(roomBarH, GAP, y);
 
-  // 1. Draw ribbons first (behind bars)
+  // 1. Ribbons (behind bars) — each ribbon has identical height on both ends
   const lx  = LBX + BAR_W;
   const rx  = RBX;
   const dx  = rx - lx;
@@ -400,60 +489,78 @@ function drawSankey(
       Math.round(cat.b * 0.3 + 255 * 0.7),
     );
     for (let ri = 0; ri < rooms.length; ri++) {
-      const rr  = rooms[ri];
-      const bwL = (rr.result.totalLoss / total) * catBarH[ci];
-      const bwR = (cat.value           / total) * roomBarH[ri];
-
-      if (bwL >= 0.15 && bwR >= 0.15) {
-        const ly1 = catBandY[ci];
-        const ry1 = roomBandY[ri];
-        const dyT = ry1 - ly1;
-        const dyB = (ly1 + bwL) - (ry1 + bwR);
-        doc.lines(
-          [
-            [cpO, 0, dx - cpO, dyT, dx, dyT],
-            [0, bwR],
-            [-cpO, 0, -(dx - cpO), dyB, -dx, dyB],
-          ],
-          lx, ly1, [1, 1], 'F', true,
-        );
-      }
-      catBandY[ci]  += bwL;
-      roomBandY[ri] += bwR;
+      const flow = rooms[ri].flows[cat.key] ?? 0;
+      const fh   = flow * mmPerW;
+      const ly1  = catBandY[ci];
+      const ry1  = roomBandY[ri];
+      catBandY[ci]  += fh;  // advance cursor regardless so bars are exactly filled
+      roomBandY[ri] += fh;
+      if (fh < 0.05) continue; // skip invisible ribbons after advancing
+      const dyT = ry1 - ly1;
+      doc.lines(
+        [
+          [ cpO, 0, dx  - cpO,  dyT, dx,  dyT],
+          [0, fh],
+          [-cpO, 0, -(dx - cpO), -dyT, -dx, -dyT],
+        ],
+        lx, ly1, [1, 1], 'F', true,
+      );
     }
   }
 
-  // 2. Draw bars on top
+  // 2. Bars on top
   for (let ci = 0; ci < cats.length; ci++) {
     const { r, g, b } = cats[ci];
     doc.setFillColor(r, g, b);
     doc.rect(LBX, catY[ci], BAR_W, catBarH[ci], 'F');
   }
   for (let ri = 0; ri < rooms.length; ri++) {
-    const t = rooms[ri].result.totalLoss / total;
+    const t = rooms[ri].total / total;
     doc.setFillColor(Math.round(55 + t * 185), Math.round(120 - t * 80), Math.round(210 - t * 175));
     doc.rect(RBX, roomY[ri], BAR_W, roomBarH[ri], 'F');
   }
 
-  // 3. Labels
-  doc.setFontSize(6.5);
+  // 3. Labels — left nodes, single inline line (right-to-left measurement)
   for (let ci = 0; ci < cats.length; ci++) {
     const { label, value, r, g, b } = cats[ci];
     const midY = catY[ci] + catBarH[ci] / 2;
-    doc.setFont('helvetica', 'bold');   doc.setTextColor(r, g, b);
-    doc.text(label,                     LBX - 2, midY - 0.5, { align: 'right' });
-    doc.setFont('helvetica', 'normal'); doc.setTextColor(80, 80, 80);
-    doc.text(`${Math.round(value)} W`,  LBX - 2, midY + 4,   { align: 'right' });
+    const pct  = `${(value / total * 100).toFixed(0)} %`;
+    const wStr = `${Math.round(value)} W`;
+
+    // Percentage — rightmost, light gray
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(5.0); doc.setTextColor(130, 130, 130);
+    doc.text(pct, LBX - 2, midY, { align: 'right' });
+    const pctW = doc.getTextWidth(pct);
+
+    // W value — bold, dark gray
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(5.5); doc.setTextColor(60, 60, 60);
+    doc.text(wStr, LBX - 2 - pctW - 1.5, midY, { align: 'right' });
+    const wW = doc.getTextWidth(wStr);
+
+    // Category name — bold, category colour
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(6.0); doc.setTextColor(r, g, b);
+    doc.text(label, LBX - 2 - pctW - 1.5 - wW - 1.5, midY, { align: 'right' });
   }
+
+  // 3. Labels — right nodes (room name · W value · %)
+  const labelX = RBX + BAR_W + 2;
   for (let ri = 0; ri < rooms.length; ri++) {
-    const rr   = rooms[ri];
-    const room = roomMap.get(rr.roomId);
+    const { rr, room } = rooms[ri];
     const midY = roomY[ri] + roomBarH[ri] / 2;
-    const name = (room?.label ?? rr.roomId).substring(0, 16);
-    doc.setFont('helvetica', 'normal'); doc.setTextColor(40, 40, 40);
-    doc.text(name,                                        RBX + BAR_W + 2, midY - 0.5);
-    doc.setTextColor(100, 100, 100);
-    doc.text(`${Math.round(rr.result.totalLoss)} W`,     RBX + BAR_W + 2, midY + 4);
+    const name = (room?.label ?? rr.roomId).substring(0, 13);
+    const wStr = `${Math.round(rooms[ri].total)} W`;
+    const pStr = `${(rooms[ri].total / total * 100).toFixed(0)} %`;
+
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(5.5); doc.setTextColor(50, 50, 50);
+    doc.text(name, labelX, midY);
+    const nameW = doc.getTextWidth(name);
+
+    doc.setFont('helvetica', 'bold');   doc.setFontSize(5.5); doc.setTextColor(15, 15, 15);
+    doc.text(wStr, labelX + nameW + 1.5, midY);
+    const wW = doc.getTextWidth(wStr);
+
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(5.0); doc.setTextColor(130, 130, 130);
+    doc.text(pStr, labelX + nameW + 1.5 + wW + 1.5, midY);
   }
 
   doc.setTextColor(0); doc.setDrawColor(0); doc.setFillColor(0, 0, 0);

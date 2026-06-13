@@ -83,6 +83,24 @@ export function renderProjectPanel(container: HTMLElement, project: Project, edi
     editor.updateProject({ groundTemperature: isNaN(v) ? 10 : v });
   }));
 
+  // ── Heat gains from warmer neighbours (non-norm) ──
+  const gainsCb = document.createElement('input') as HTMLInputElement;
+  gainsCb.type = 'checkbox';
+  gainsCb.className = 'proj-checkbox';
+  gainsCb.checked = project.allowHeatGains ?? false;
+  gainsCb.addEventListener('change', () => {
+    editor.updateProject({ allowHeatGains: gainsCb.checked });
+  });
+  const gainsWrap = document.createElement('div');
+  gainsWrap.className = 'proj-gains-wrap';
+  gainsWrap.appendChild(gainsCb);
+  const gainsWarn = document.createElement('span');
+  gainsWarn.className = 'proj-gains-warning';
+  gainsWarn.title = 'Weicht von DIN EN 12831 vereinfachter Methode ab. Interne Wärmeflüsse von wärmeren Nachbarräumen werden als Gewinne angerechnet — beeinflusst Raumheizlasten, nicht die Gebäude-Gesamtheizlast.';
+  gainsWarn.textContent = '⚠ Abweichung von Norm';
+  gainsWrap.appendChild(gainsWarn);
+  addRow(grid, 'Wärmegewinne (Nachbar)', gainsWrap);
+
   // ── Heated area (read-only) ──
   const floor = project.floors[0];
   const totalArea = floor.rooms.reduce((s, r) => s + (r.area ?? 0), 0);

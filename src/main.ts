@@ -52,9 +52,9 @@ function doRender(): void {
   const project = editor.getProject();
   const activeIdx  = state.activeFloorIndex;
   const floor      = project.floors[activeIdx] ?? project.floors[0];
-  const ghostFloors = project.floors.length > 1
-    ? project.floors.filter((_, i) => i !== activeIdx)
-    : undefined;
+  const activeFloor = project.floors[activeIdx];
+  const floorBelow  = project.floors.find(f => f.level === activeFloor.level - 1);
+  const ghostFloors = floorBelow ? [floorBelow] : undefined;
   renderFloor(ctx, floor, state.viewport, editor.getRenderState(), canvas.width, canvas.height, ghostFloors);
 }
 

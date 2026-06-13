@@ -105,7 +105,8 @@ export interface Project {
   name: string;
   plz: string;
   designTemperatureOverride?: number;
-  groundTemperature?: number;  // °C, default 10 per DIN EN 12831
+  groundTemperature?: number;   // °C, default 10 per DIN EN 12831
+  allowHeatGains?: boolean;     // non-norm: count warmer-neighbour fluxes as gains
   floors: Floor[];
   hullGroups: HullGroup[];
   createdAt: string;
@@ -129,6 +130,8 @@ export interface RoomHeizlastResult {
   transmissionLoss: number; // W
   ventilationLoss: number;  // W
   totalLoss: number;        // W
+  volume: number;           // m³ (used for ventilation calculation)
+  nMin: number;             // h⁻¹ (applied air change rate)
   elementBreakdown: ElementHeatLoss[];
 }
 
@@ -136,6 +139,7 @@ export interface HullSummaryEntry {
   hullId: string;
   hullName: string;
   totalTransmissionLoss: number; // W
+  totalArea: number;             // m²
   shareOfBuildingTotal: number;  // 0–1
 }
 

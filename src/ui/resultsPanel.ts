@@ -332,12 +332,13 @@ function renderHullGroupEditor(
   result: HeizlastResult,
 ): void {
   const hullTable = el('table', { class: 'rb-table rb-hull-table' });
-  hullTable.innerHTML = `<thead><tr><th>Hüllgruppe</th><th>ΦT (W)</th><th>Anteil</th></tr></thead>`;
+  hullTable.innerHTML = `<thead><tr><th>Hüllgruppe</th><th>A (m²)</th><th>ΦT (W)</th><th>Anteil</th></tr></thead>`;
   const tb = el('tbody', {});
   for (const he of result.hullSummary) {
     const tr = el('tr', {});
     tr.innerHTML = `
       <td>${he.hullName}</td>
+      <td class="rb-num">${he.totalArea.toFixed(1)}</td>
       <td class="rb-num">${Math.round(he.totalTransmissionLoss)}</td>
       <td class="rb-num">${(he.shareOfBuildingTotal * 100).toFixed(0)}%</td>
     `;

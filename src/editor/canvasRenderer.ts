@@ -76,6 +76,7 @@ export function renderFloor(
 
   drawRooms(ctx, floor, vp, state);
   drawWallsAndOpenings(ctx, floor, vp, state);
+  drawBoundaryLabels(ctx, floor, vp, state);
   drawPreview(ctx, vp, state);
   drawRoomLabels(ctx, floor, vp, state);
   drawCursorCross(ctx, vp, state);
@@ -476,20 +477,12 @@ function drawWallsAndOpenings(ctx: CanvasRenderingContext2D, floor: Floor, vp: V
 
     ctx.restore();
 
-    // Both labels drawn in canvas space so text is always horizontal and
-    // the two labels are always on opposite sides of the wall.
-    if (isSelected || isDragging || state.showBoundaryLabels) {
+    // Dimension label: below the selected/dragging wall only
+    if (isSelected || isDragging) {
       const midX = (cs.x + ce.x) / 2;
       const midY = (cs.y + ce.y) / 2;
-      // Adjacency badge: above the wall midpoint in screen space
-      if (!isDragging) {
-        drawAdjacencyBadge(ctx, midX, midY - halfT - 14, wall.boundaryCategory);
-      }
-      // Dimension label: below only for selected / dragging (not global label mode)
-      if (isSelected || isDragging) {
-        const lenM = (wallLenW / 1000).toFixed(2);
-        drawDimLabelLocal(ctx, midX, midY + halfT + 12, `${lenM} m`);
-      }
+      const lenM = (wallLenW / 1000).toFixed(2);
+      drawDimLabelLocal(ctx, midX, midY + halfT + 12, `${lenM} m`);
     }
 
     // Endpoint drag handles
@@ -695,6 +688,26 @@ function drawCursorCross(ctx: CanvasRenderingContext2D, vp: Viewport, state: Ren
   ctx.beginPath(); ctx.arc(cp.x, cp.y, 4, 0, Math.PI * 2);
   ctx.strokeStyle = '#fb923c'; ctx.stroke();
   ctx.restore();
+}
+
+// ---- Boundary labels overlay (drawn after all wall fills so badges are always on top) ----
+
+function drawBoundaryLabels(ctx: CanvasRenderingContext2D, floor: Floor, vp: Viewport, state: RenderState): void {
+  for (const wall of floor.walls) {
+    const showBadge = wall.id === state.selectedWallId || state.showBoundaryLabels;
+    if (!showBadge) continue;
+    if (wall.id === state.draggingVertexWallId) continue;
+
+    const cs = worldToCanvas(wall.start, vp);
+    const ce = worldToCanvas(wall.end,   vp);
+    const wallLenPx = Math.hypot(ce.x - cs.x, ce.y - cs.y);
+    if (wallLenPx < 1) continue;
+
+    const halfT = wall.thickness / 2 * vp.scale;
+    const midX  = (cs.x + ce.x) / 2;
+    const midY  = (cs.y + ce.y) / 2;
+    drawAdjacencyBadge(ctx, midX, midY - halfT - 14, wall.boundaryCategory);
+  }
 }
 
 // ---- Room labels ----
