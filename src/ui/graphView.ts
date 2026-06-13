@@ -122,7 +122,7 @@ export function renderGraph(
 
   const REPULSION      = 32000;
   const SPRING_K       = 0.05;
-  const GRAVITY        = 0.04;
+  const GRAVITY        = 0.00;
   const DAMPING_SETTLE = 0.78;
   const maxFlow = Math.max(...edges.map(e => e.flow), 1);
   const vx = nodes.map(() => 0);
@@ -210,7 +210,7 @@ export function renderGraph(
   titleEl.setAttribute('text-anchor', 'middle');
   titleEl.setAttribute('dominant-baseline', 'central');
   titleEl.setAttribute('class',       'sk-title');
-  titleEl.textContent = 'Wärmefluss-Netzwerk';
+  titleEl.textContent = 'Wärmeflussnetzwerk';
   svg.appendChild(titleEl);
 
   // Edge layer — stroke/opacity/marker-end set at creation and by updateSelection();
