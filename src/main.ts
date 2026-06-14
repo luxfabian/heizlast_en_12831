@@ -8,6 +8,7 @@ import { renderLibraryPanel } from './ui/libraryPanel.js';
 import { renderRoomPanel } from './ui/roomPanel.js';
 import { renderResultsBench, renderSankey } from './ui/resultsPanel.js';
 import { renderGraph } from './ui/graphView.js';
+import { renderElementChart } from './ui/elementChartView.js';
 import { renderReport } from './ui/reportView.js';
 import { renderSettingsView } from './ui/settingsView.js';
 import { renderImpressumView } from './ui/impressumView.js';
@@ -159,6 +160,7 @@ function refreshResultsBench(): void {
 const canvasContainer  = document.getElementById('canvas-container')!;
 const sankeyView       = document.getElementById('sankey-view')!;
 const graphView        = document.getElementById('graph-view')!;
+const elementsView     = document.getElementById('elements-view')!;
 const reportView       = document.getElementById('report-view')!;
 const settingsViewEl   = document.getElementById('settings-view')!;
 const materialsViewEl  = document.getElementById('materials-view')!;
@@ -166,17 +168,19 @@ const impressumViewEl  = document.getElementById('impressum-view')!;
 const viewPlanBtn      = document.getElementById('view-plan-btn')!;
 const viewSankeyBtn    = document.getElementById('view-sankey-btn')!;
 const viewGraphBtn     = document.getElementById('view-graph-btn')!;
+const viewElementsBtn  = document.getElementById('view-elements-btn')!;
 const viewReportBtn    = document.getElementById('view-report-btn')!;
 const viewSettingsBtn  = document.getElementById('view-settings-btn')!;
 const viewMaterialsBtn = document.getElementById('view-materials-btn')!;
 const viewImpressumBtn = document.getElementById('view-impressum-btn')!;
 
-type ViewName = 'plan' | 'sankey' | 'graph' | 'report' | 'settings' | 'materials' | 'impressum';
+type ViewName = 'plan' | 'sankey' | 'graph' | 'elements' | 'report' | 'settings' | 'materials' | 'impressum';
 
 function activateView(view: ViewName): void {
   canvasContainer.style.display  = 'none';
   sankeyView.style.display       = 'none';
   graphView.style.display        = 'none';
+  elementsView.style.display     = 'none';
   reportView.style.display       = 'none';
   settingsViewEl.style.display   = 'none';
   materialsViewEl.style.display  = 'none';
@@ -184,6 +188,7 @@ function activateView(view: ViewName): void {
   viewPlanBtn.classList.remove('active');
   viewSankeyBtn.classList.remove('active');
   viewGraphBtn.classList.remove('active');
+  viewElementsBtn.classList.remove('active');
   viewReportBtn.classList.remove('active');
   viewSettingsBtn.classList.remove('active');
   viewMaterialsBtn.classList.remove('active');
@@ -202,6 +207,10 @@ function activateView(view: ViewName): void {
     graphView.style.display = 'flex';
     viewGraphBtn.classList.add('active');
     if (state.heizlastResult) renderGraph(graphView, state.heizlastResult, editor.getProject() as Project);
+  } else if (view === 'elements') {
+    elementsView.style.display = 'flex';
+    viewElementsBtn.classList.add('active');
+    if (state.heizlastResult) renderElementChart(elementsView, state.heizlastResult, editor.getProject() as Project);
   } else if (view === 'report') {
     reportView.style.display = 'flex';
     viewReportBtn.classList.add('active');
@@ -234,6 +243,7 @@ editor.onChange(() => {
 viewPlanBtn.addEventListener('click',      () => activateView('plan'));
 viewSankeyBtn.addEventListener('click',    () => activateView('sankey'));
 viewGraphBtn.addEventListener('click',     () => activateView('graph'));
+viewElementsBtn.addEventListener('click',  () => activateView('elements'));
 viewReportBtn.addEventListener('click',    () => activateView('report'));
 viewSettingsBtn.addEventListener('click',  () => activateView('settings'));
 viewMaterialsBtn.addEventListener('click', () => activateView('materials'));
@@ -261,6 +271,7 @@ document.getElementById('new-btn')?.addEventListener('click', () => {
   editor.resetProject();
   viewSankeyBtn.setAttribute('disabled', '');
   viewGraphBtn.setAttribute('disabled', '');
+  viewElementsBtn.setAttribute('disabled', '');
   viewReportBtn.setAttribute('disabled', '');
   activateView('plan');
   activateTool('select');
@@ -310,6 +321,7 @@ document.getElementById('calc-btn')?.addEventListener('click', () => {
   // Enable result tabs now that results are available
   viewSankeyBtn.removeAttribute('disabled');
   viewGraphBtn.removeAttribute('disabled');
+  viewElementsBtn.removeAttribute('disabled');
   viewReportBtn.removeAttribute('disabled');
 });
 

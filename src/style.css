@@ -1648,6 +1648,14 @@ h4 {
 /* ═══════════════════════════════════════════════════
    REPORT VIEW
 ═══════════════════════════════════════════════════ */
+#elements-view {
+  flex: 1;
+  min-width: 0;
+  background: #0f1117;
+  display: flex;
+  overflow: hidden;
+}
+
 #report-view {
   display: flex;
   flex: 1;

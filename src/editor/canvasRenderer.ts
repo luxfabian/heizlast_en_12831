@@ -40,6 +40,7 @@ export interface RenderState {
   heizlastResult?: HeizlastResult;
   showHeatMap: boolean;
   showBoundaryLabels: boolean;
+  showRoomLabels?: boolean;
   gridEnabled: boolean;
   tool: ToolMode;
 }
@@ -78,7 +79,7 @@ export function renderFloor(
   drawWallsAndOpenings(ctx, floor, vp, state);
   drawBoundaryLabels(ctx, floor, vp, state);
   drawPreview(ctx, vp, state);
-  drawRoomLabels(ctx, floor, vp, state);
+  if (state.showRoomLabels !== false) drawRoomLabels(ctx, floor, vp, state);
   drawCursorCross(ctx, vp, state);
 }
 
