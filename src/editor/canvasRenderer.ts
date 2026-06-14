@@ -692,6 +692,19 @@ function drawCursorCross(ctx: CanvasRenderingContext2D, vp: Viewport, state: Ren
 
 // ---- Boundary labels overlay (drawn after all wall fills so badges are always on top) ----
 
+function drawWallInfoText(ctx: CanvasRenderingContext2D, x: number, y: number, text: string, color: string): void {
+  ctx.save();
+  ctx.font          = '9px "Inter", system-ui';
+  ctx.textAlign     = 'center';
+  ctx.textBaseline  = 'middle';
+  const w = ctx.measureText(text).width + 6;
+  ctx.fillStyle = 'rgba(15,17,23,0.80)';
+  ctx.fillRect(x - w / 2, y - 6, w, 12);
+  ctx.fillStyle = color;
+  ctx.fillText(text, x, y);
+  ctx.restore();
+}
+
 function drawBoundaryLabels(ctx: CanvasRenderingContext2D, floor: Floor, vp: Viewport, state: RenderState): void {
   for (const wall of floor.walls) {
     const showBadge = wall.id === state.selectedWallId || state.showBoundaryLabels;
@@ -706,7 +719,19 @@ function drawBoundaryLabels(ctx: CanvasRenderingContext2D, floor: Floor, vp: Vie
     const halfT = wall.thickness / 2 * vp.scale;
     const midX  = (cs.x + ce.x) / 2;
     const midY  = (cs.y + ce.y) / 2;
-    drawAdjacencyBadge(ctx, midX, midY - halfT - 14, wall.boundaryCategory);
+
+    const badgeY = midY - halfT - 14;
+    drawAdjacencyBadge(ctx, midX, badgeY, wall.boundaryCategory);
+
+    if (state.showBoundaryLabels) {
+      const uText = `${wall.uValue.toFixed(2)} W/m²K`;
+      const uY = badgeY - 18;
+      drawWallInfoText(ctx, midX, uY, uText, '#94a3b8');
+
+      if (wall.label) {
+        drawWallInfoText(ctx, midX, uY - 14, wall.label, '#93c5fd');
+      }
+    }
   }
 }
 
