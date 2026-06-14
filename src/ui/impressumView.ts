@@ -6,18 +6,15 @@ export function renderImpressumView(container: HTMLElement): void {
   wrap.innerHTML = `
     <div class="sv-section">
       <div class="imp-title">Impressum</div>
-      <p class="sv-desc">Angaben gemäß § 5 TMG</p>
 
       <div class="imp-block">
-        <div class="imp-field-label">Diensteanbieter</div>
-        <div class="imp-placeholder">Vorname Nachname</div>
-        <div class="imp-placeholder">Straße und Hausnummer</div>
-        <div class="imp-placeholder">PLZ Ort</div>
+        <div class="imp-field-label">Author</div>
+        <div class="imp-placeholder">Fabian Lux</div>
       </div>
 
       <div class="imp-block">
         <div class="imp-field-label">Kontakt</div>
-        <div class="imp-placeholder">E-Mail: vorname.nachname@example.com</div>
+        <div class="imp-placeholder">E-Mail: fabian.lux@rwth-aachen.de</div>
       </div>
     </div>
 

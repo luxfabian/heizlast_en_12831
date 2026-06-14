@@ -1,4 +1,4 @@
-import type { Room, WallSegment, Opening, BoundaryCategory, RoomCeiling, RoomFloor } from '../model/types.js';
+import type { Room, WallSegment, Opening, BoundaryCategory, RoomCeiling, RoomFloor, Project } from '../model/types.js';
 import type { Editor } from '../editor/editorState.js';
 import { getBoundaryCategoryLabel, getBoundaryCategoryColor } from '../editor/adjacency.js';
 import { getRoomPolygon, polygonIntersectionArea } from '../calc/heizlast.js';
@@ -7,6 +7,12 @@ import type { WallTypePreset, OpeningTypePreset, CeilingTypePreset } from '../li
 import { loadCustomPresets, addCustomWallPreset, addCustomOpeningPreset, addCustomFloorPreset } from '../library/customPresets.js';
 import { v4 as uuidv4 } from '../utils/uuid.js';
 
+
+function keepActive<T extends { id: string }>(project: Project, presets: T[]): T[] {
+  if (project.activePresetIds === undefined) return presets;
+  const active = new Set(project.activePresetIds);
+  return presets.filter(p => active.has(p.id));
+}
 
 // ---- Preset data for quick-size buttons ----
 const WINDOW_SIZE_PRESETS = [
@@ -265,7 +271,8 @@ function makeFloorCard(
   }
   card.appendChild(cardHeader);
 
-  const allFloorPresets = [...FLOOR_PRESETS, ...loadCustomPresets().floors];
+  const _proj = editor.getProject() as Project;
+  const allFloorPresets = [...keepActive(_proj, FLOOR_PRESETS), ...loadCustomPresets().floors];
   const presetSel = el('select', { class: 'input' }) as HTMLSelectElement;
   presetSel.appendChild(el('option', { value: '' }, '— Benutzerdefiniert —'));
   for (const p of allFloorPresets) {
@@ -465,10 +472,12 @@ function makeCeilingCard(
       'U-Wert und Grenzkategorie werden automatisch aus dem Bodenaufbau der oberen Etage übernommen. Dieser Aufbau gilt nur für Deckenflächen ohne Raum darüber.'));
   }
 
+  const _proj = editor.getProject() as Project;
+  const activeCeilingPresets = keepActive(_proj, CEILING_PRESETS);
   const presetLabel = hasAbove ? 'Aufbau Restfläche' : 'Deckenaufbau';
   const presetSel = el('select', { class: 'input' }) as HTMLSelectElement;
   presetSel.appendChild(el('option', { value: '' }, '— Benutzerdefiniert —'));
-  for (const p of CEILING_PRESETS) {
+  for (const p of activeCeilingPresets) {
     const opt = el('option', { value: p.id }, `${p.name} (U ${p.uValue.toFixed(2)})`) as HTMLOptionElement;
     opt.selected = p.id === ceil.typePresetId;
     presetSel.appendChild(opt);
@@ -479,7 +488,7 @@ function makeCeilingCard(
       editor.updateRoom(room.id, { ceilings: updated });
       return;
     }
-    const p = CEILING_PRESETS.find(pr => pr.id === presetSel.value);
+    const p = activeCeilingPresets.find(pr => pr.id === presetSel.value);
     if (!p) return;
     const patch = { typePresetId: p.id, uValue: p.uValue };
     const updated = ceilings.map((c, i) => i === index ? { ...c, ...patch } : c);
@@ -745,8 +754,9 @@ function renderWallPanel(container: HTMLElement, wall: WallSegment, editor: Edit
   sec.appendChild(field('Bezeichnung', labelInp));
 
   // Wall type preset dropdown
+  const project = editor.getProject() as Project;
   const custom = loadCustomPresets();
-  const allWallPresets: WallTypePreset[] = [...WALL_PRESETS, ...custom.walls];
+  const allWallPresets: WallTypePreset[] = [...keepActive(project, WALL_PRESETS), ...custom.walls];
   const presetSel = el('select', { class: 'input' }) as HTMLSelectElement;
   const blankOpt = el('option', { value: '' }, '— Benutzerdefiniert —') as HTMLOptionElement;
   if (!allWallPresets.find(p => p.id === wall.typePresetId)) blankOpt.selected = true;
@@ -834,10 +844,11 @@ function renderOpeningPanel(container: HTMLElement, op: Opening, editor: Editor)
   sec.appendChild(field('Bezeichnung', labelInp));
 
   // Opening type preset dropdown
+  const project = editor.getProject() as Project;
   const customPresets = loadCustomPresets();
   const builtinPresets = op.type === 'window' ? WINDOW_PRESETS : op.type === 'door' ? DOOR_PRESETS : GARAGE_PRESETS;
   const customOfType = op.type === 'window' ? customPresets.windows : op.type === 'door' ? customPresets.doors : customPresets.garageDoors;
-  const allOpeningPresets: OpeningTypePreset[] = [...builtinPresets, ...customOfType];
+  const allOpeningPresets: OpeningTypePreset[] = [...keepActive(project, builtinPresets), ...customOfType];
   const opPresetSel = el('select', { class: 'input' }) as HTMLSelectElement;
   const opBlankOpt = el('option', { value: '' }, '— Benutzerdefiniert —') as HTMLOptionElement;
   if (!allOpeningPresets.find(p => p.id === op.typePresetId)) opBlankOpt.selected = true;
