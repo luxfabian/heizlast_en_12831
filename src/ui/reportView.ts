@@ -43,15 +43,17 @@ export function renderReport(
 
   const kpis = el('div', { class: 'rp-kpis' });
   const kpiItems: [string, string][] = [
-    [`${(result.designHeatLoad / 1000).toFixed(2)} kW`, 'ΦHL gesamt'],
+    [`${(result.designHeatLoad / 1000).toFixed(2)} kW`, 'Φ<sub>HL</sub> gesamt'],
     [`${result.designSpecificHeatLoad.toFixed(0)} W/m²`, 'Spezifisch'],
-    [`${result.designTemperature} °C`, 'θe Norm'],
+    [`${result.designTemperature} °C`, 'θ<sub>e</sub> Norm'],
   ];
   if (result.plz) kpiItems.push([result.plz, 'PLZ']);
-  for (const [value, label] of kpiItems) {
+  for (const [value, labelHtml] of kpiItems) {
     const kpi = el('div', { class: 'rp-kpi' });
     kpi.appendChild(el('div', { class: 'rp-kpi-value' }, value));
-    kpi.appendChild(el('div', { class: 'rp-kpi-label' }, label));
+    const lbl = el('div', { class: 'rp-kpi-label' });
+    lbl.innerHTML = labelHtml;
+    kpi.appendChild(lbl);
     kpis.appendChild(kpi);
   }
   summarySection.appendChild(kpis);
@@ -60,11 +62,11 @@ export function renderReport(
   summarySection.appendChild(el('div', { class: 'rp-section-title' }, 'Verluste nach Kategorie'));
   const catTable = el('table', { class: 'rp-table' });
   catTable.innerHTML = `<thead><tr>
-    <th>Kategorie</th><th class="rp-num">ΦHL (W)</th><th class="rp-num">Anteil</th>
+    <th>Kategorie</th><th class="rp-num">Φ<sub>HL</sub> (W)</th><th class="rp-num">Anteil</th>
   </tr></thead>`;
   const catTbody = el('tbody', {});
   const catRows: [string, number][] = [
-    ['Außenluft / Unbeheizt', result.lossByCategory.exterior],
+    ['Außenluft / Nachbargbd.', result.lossByCategory.exterior],
     ['Erdreich',               result.lossByCategory.ground],
     ['Nachbargebäude',         result.lossByCategory.adjNeighbor],
     ['Lüftung',                result.lossByCategory.ventilation],
@@ -151,19 +153,21 @@ function renderRoomDetail(
     : `${room.designTemperature} °C`;
 
   const kpiData: [string, string][] = [
-    [`${area.toFixed(1)} m²`,  'Fläche'],
-    [tempDisplay,               isUnheated ? 'θeq' : 'θi'],
-    [`${res.volume.toFixed(1)} m³`, 'Volumen'],
-    [`${Math.round(res.totalLoss)} W`, 'ΦHL'],
-    [`${Math.round(res.transmissionLoss)} W`, 'ΦT'],
-    [`${Math.round(res.ventilationLoss)} W`, 'ΦV'],
-    [`${spec.toFixed(0)} W/m²`,    'Spezif.'],
-    [`${res.nMin.toFixed(2)} h⁻¹`, 'nMin'],
+    [`${area.toFixed(1)} m²`,       'Fläche'],
+    [tempDisplay,                    isUnheated ? 'θ<sub>eq</sub>' : 'θ<sub>i</sub>'],
+    [`${res.volume.toFixed(1)} m³`,  'Volumen'],
+    [`${Math.round(res.totalLoss)} W`,         'Φ<sub>HL</sub>'],
+    [`${Math.round(res.transmissionLoss)} W`,   'Φ<sub>T</sub>'],
+    [`${Math.round(res.ventilationLoss)} W`,    'Φ<sub>V</sub>'],
+    [`${spec.toFixed(0)} W/m²`,     'Spezif.'],
+    [`${res.nMin.toFixed(2)} h⁻¹`,  'n<sub>Min</sub>'],
   ];
-  for (const [value, label] of kpiData) {
+  for (const [value, labelHtml] of kpiData) {
     const kpi = el('div', { class: 'rp-rkpi' });
     kpi.appendChild(el('span', { class: 'rp-rkpi-v' }, value));
-    kpi.appendChild(el('span', { class: 'rp-rkpi-l' }, label));
+    const lbl = el('span', { class: 'rp-rkpi-l' });
+    lbl.innerHTML = labelHtml;
+    kpi.appendChild(lbl);
     kpis.appendChild(kpi);
   }
   header.appendChild(kpis);
@@ -186,8 +190,8 @@ function renderRoomDetail(
 
     const adjTable = el('table', { class: 'rp-table' });
     adjTable.innerHTML = `<thead><tr>
-      <th>Raum</th><th class="rp-num">θi (°C)</th>
-      <th>Kategorie</th><th class="rp-num">A (m²)</th><th class="rp-num">ΦT (W)</th>
+      <th>Raum</th><th class="rp-num">θ<sub>i</sub> (°C)</th>
+      <th>Kategorie</th><th class="rp-num">A (m²)</th><th class="rp-num">Φ<sub>T</sub> (W)</th>
     </tr></thead>`;
     const adjTbody = el('tbody', {});
     for (const [adjId, d] of adjMap) {
@@ -215,7 +219,7 @@ function renderRoomDetail(
   surfTable.innerHTML = `<thead><tr>
     <th>Element</th><th>Grenzraum</th>
     <th class="rp-num">A (m²)</th><th class="rp-num">U (W/m²K)</th>
-    <th class="rp-num">fij</th><th class="rp-num">ΔT (K)</th><th class="rp-num">ΦT (W)</th>
+    <th class="rp-num">f<sub>ij</sub></th><th class="rp-num">ΔT (K)</th><th class="rp-num">Φ<sub>T</sub> (W)</th>
   </tr></thead>`;
   const surfTbody = el('tbody', {});
 
@@ -247,7 +251,7 @@ function renderRoomDetail(
   }
 
   const tTr = el('tr', { class: 'rp-total-row' });
-  tTr.innerHTML = `<td colspan="6">ΦT Transmission gesamt</td>
+  tTr.innerHTML = `<td colspan="6">Φ<sub>T</sub> Transmission gesamt</td>
     <td class="rp-num"><strong>${Math.round(res.transmissionLoss)}</strong></td>`;
   surfTbody.appendChild(tTr);
   surfTable.appendChild(surfTbody);
@@ -260,9 +264,9 @@ function renderRoomDetail(
   const ventTable = el('table', { class: 'rp-table' });
   const ventTbody = el('tbody', {});
   const ventRows: [string, string][] = [
-    ['Volumen V',                  `${res.volume.toFixed(1)} m³`],
-    ['nMin (Mindestluftwechsel)',   `${res.nMin.toFixed(2)} h⁻¹`],
-    ['ΦV (Lüftungswärmeverlust)',  `${Math.round(res.ventilationLoss)} W`],
+    ['Volumen V',                                    `${res.volume.toFixed(1)} m³`],
+    ['n<sub>Min</sub> (Mindestluftwechsel)',          `${res.nMin.toFixed(2)} h⁻¹`],
+    ['Φ<sub>V</sub> (Lüftungswärmeverlust)',         `${Math.round(res.ventilationLoss)} W`],
   ];
   for (const [label, value] of ventRows) {
     const tr = el('tr', {});
