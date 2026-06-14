@@ -2,6 +2,18 @@
 
 Browser-based heating load calculator following **DIN EN 12831** with a 2D CAD floor plan editor. Draw rooms, assign materials, enter your postal code — and get a complete room-by-room heat load breakdown with charts and a printable PDF report.
 
+## Disclaimers
+
+### Conformity with DIN EN 12831
+
+This application implements a **simplified interpretation** of DIN EN 12831-1:2017. Conformity with the current version of the norm is **not guaranteed**. Results depend on the accuracy of the input data (geometry, U-values, air change rates, boundary conditions) provided by the user. The application is intended as a planning aid and does **not** replace verification by a qualified engineer. The user bears full responsibility for checking and validating all results before using them as a basis for engineering decisions.
+
+### AI-assisted development
+
+This application was developed entirely with the assistance of **[Claude Code](https://claude.ai/code)** (Anthropic PBC), an AI-powered coding tool. All source code — including the calculation engine, CAD editor, and user interface — was produced through AI-assisted programming. The author has reviewed and validated the code, but users should be aware of this development context.
+
+---
+
 ## Table of contents
 
 - [Requirements](#requirements)
@@ -14,18 +26,16 @@ Browser-based heating load calculator following **DIN EN 12831** with a 2D CAD f
   - [4. Manage floors](#4-manage-floors)
   - [5. Set room properties](#5-set-room-properties)
   - [6. Calculate](#6-calculate)
-  - [7. Export](#7-export)
+  - [7. Analyse results](#7-analyse-results)
+  - [8. Export](#8-export)
 - [Keyboard shortcuts](#keyboard-shortcuts)
 - [Project structure](#project-structure)
 - [Calculation overview](#calculation-overview)
+- [Uncertainty analysis](#uncertainty-analysis)
 - [Test suite](#test-suite)
-- [Deploying to a server](#deploying-to-a-server)
-  - [1. Build the app locally](#1-build-the-app-locally)
-  - [2. Install nginx on the server](#2-install-nginx-on-the-server)
-  - [3. Copy the build to the server](#3-copy-the-build-to-the-server)
-  - [4. Configure nginx](#4-configure-nginx)
-  - [5. Add a domain and HTTPS](#5-add-a-domain-and-https-recommended)
-  - [Updating](#updating)
+- [Deploying](#deploying)
+  - [GitHub Pages](#github-pages)
+  - [Self-hosted (nginx)](#self-hosted-nginx)
 - [Scope and limitations](#scope-and-limitations)
 
 ## Requirements
@@ -62,14 +72,18 @@ npm run preview
 
 ### 1. Set project parameters
 
-The **Projekt** panel (left column) lets you configure:
+Open the **Einstellungen** tab in the toolbar. It has two sections:
 
+**Projektinformationen**
 - Project name
-- Postal code (PLZ) — norm outside temperature θe is looked up from DIN EN 12831 / DWD climate zones and shown in green below the field
-- **Als Norm** button — copies the PLZ-derived temperature into the θe override field
-- θe Norm (°C) — manual override for the design outside temperature
-- θg Erde (°C) — ground temperature (default 10 °C per DIN EN 12831)
-- Heated area (read-only, derived from drawn rooms)
+- Postal code (PLZ) — norm outside temperature θe is looked up from DIN EN 12831 / DWD climate zones
+- θe Normaussentemperatur (°C) — manual override; leave blank to use the PLZ-derived value
+- θg Erdreichtemperatur (°C) — ground temperature (default 10 °C per DIN EN 12831)
+- Option to allow heat gains from warmer neighbouring rooms (non-standard, deviates from DIN EN 12831)
+
+**Unsicherheitsanalyse**
+
+Set relative uncertainties (%) for U-values (εU), areas (εA), and air change rates (εn). Gaussian error propagation is applied automatically; results are shown as Φ_HL ± σ. Defaults to 5 % each.
 
 ### 2. Draw walls
 
@@ -114,17 +128,28 @@ For `Unbeheizt` and `Nachbargebäude` a temperature field appears to specify the
 
 Click **▶ Berechnen**. The results bench at the bottom expands and shows:
 
-- **Summary bar** — total heat load in kW, specific heat load (W/m²), energy class badge, and a colour-coded bar proportional to each room's absolute heat load
-- **Loss breakdown** — by category (Außenluft, Erdreich, Nachbargebäude, Lüftung) with proportional bars
-- **Room overview table** — rooms from all floors, area, Ti, ΦT, ΦV, ΦHL, W/m² per room; click a row to expand the element breakdown
-- **ΦHL(θe) chart** — heat load vs. outside temperature curve (design point marked in orange)
-- **Sankey chart** — flow diagram from loss category to room across all floors, balanced to the building design heat load
+- Total heat load (kW) with uncertainty ± σ
+- Specific heat load (W/m²)
+- Energy class badge
+- Colour-coded bar proportional to each room's heat load
 
-> **Note on internal surfaces:** Heat transfers through interior walls and inter-floor ceilings/floors between rooms at the same temperature (fij ≈ 0) contribute negligibly to the design heat load and appear with near-zero values in the element breakdown.
+The floor plan switches to a **heat map** view — room colours range from blue (low load) to red (high load), normalised to the highest-loaded room.
 
-The floor plan switches to a **heat map** view — room colours range from blue (low load) to red (high load), normalised to the highest-loaded room. Canvas labels show name, design temperature, heat load (W), and floor area (when sufficiently zoomed in).
+The **Analyse** tabs in the toolbar are unlocked: Sankey, Netzwerk, Report.
 
-### 7. Export
+### 7. Analyse results
+
+**Sankey** — flow diagram from loss category to room, balanced to the building design heat load.
+
+**Netzwerk** — heat flow graph showing rooms as nodes and thermal connections as edges, with node count, edge count, and connected components.
+
+**Report** — detailed results page:
+- Building-level KPIs and loss-by-category table
+- Hull-group editor for grouping boundary elements
+- Gaussian probability distribution plot for Φ_HL (based on the propagated uncertainty σ)
+- Room selector with per-room KPIs and full element breakdown table
+
+### 8. Export
 
 | Button | Action |
 |--------|--------|
@@ -141,12 +166,13 @@ The floor plan switches to a **heat map** view — room colours range from blue 
 | `F` | Fenster einfügen |
 | `T` | Tür einfügen |
 | `G` | Garagentor einfügen |
+| `Shift+F` | Fit floor plan to view |
 | `Esc` | Abbrechen / stop drawing |
 | `Del` | Delete selected wall or opening |
 | `Ctrl+Z` | Undo (50 steps) |
 | `Ctrl+Y` | Redo |
 | Scroll wheel | Zoom in / out |
-| Middle mouse | Pan |
+| Middle mouse / Right mouse / Space | Pan |
 
 ## Project structure
 
@@ -158,13 +184,13 @@ src/
   library/     # Built-in and custom presets for walls, windows, doors, floors, ceilings
   materials/   # U-value database (static JSON)
   model/       # TypeScript data model, localStorage persistence, migration
-  ui/          # Property panel, results panel (tables + charts + Sankey), PDF export
+  ui/          # Property panel, results panel, Sankey, network graph, report, settings, impressum, PDF export
   main.ts      # Application entry point
 ```
 
 ## Calculation overview
 
-The engine follows the simplified method of **DIN EN 12831:2003**:
+The engine follows the simplified method of **DIN EN 12831-1:2017**:
 
 | Symbol | Formula |
 |--------|---------|
@@ -186,6 +212,20 @@ Temperature correction factor fij by boundary category:
 
 Wall areas are corrected for corner overlaps (internal face length = centreline length minus half-thickness of connecting walls at each vertex).
 
+## Uncertainty analysis
+
+The application propagates input uncertainties to Φ_HL using a **systematic (correlated) Gaussian error model**:
+
+| Component | Formula |
+|-----------|---------|
+| σ_T (transmission) | \|Φ_T\| · √(εU² + εA²) |
+| σ_V (ventilation) | \|Φ_V\| · √(εn² + εA²) |
+| σ total (building) | σ_T + σ_V (correlated sum — interior walls cancel) |
+
+At building level, only exterior losses (Außenluft, Erdreich, Nachbargebäude) contribute to σ, because opposing interior wall contributions cancel under correlated errors.
+
+Results are shown as Φ_HL ± σ in the bottom bar, Report KPIs, and a Gaussian probability density plot in the Report tab. Default uncertainties are 5 % for all three sources.
+
 ## Test suite
 
 ```
@@ -196,27 +236,39 @@ src/
 
 Run with `npm test`.
 
-## Deploying to a server
+## Deploying
 
-The app is fully static, so you only need a web server to host the built files. Below is a step-by-step guide for a fresh Ubuntu server (the same applies to any VPS from Hetzner, DigitalOcean, AWS, etc.).
+The app is fully static. After `npm run build` the `dist/` folder contains only HTML, CSS, and JS — no server-side runtime required.
 
-### 1. Build the app locally
+### GitHub Pages
+
+The repository is configured for automatic deployment via GitHub Actions (`.github/workflows/deploy.yml`).
+
+1. Go to your repository → **Settings** → **Pages**
+2. Set *Source* to **GitHub Actions**
+3. Push to `main` — the workflow builds and deploys automatically
+
+Live URL: `https://<your-username>.github.io/heizlast_en_12831/`
+
+### Self-hosted (nginx)
+
+Below is a step-by-step guide for a fresh Ubuntu server.
+
+#### 1. Build the app locally
 
 ```bash
 npm run build
 # produces a dist/ folder
 ```
 
-### 2. Install nginx on the server
+#### 2. Install nginx on the server
 
 ```bash
 ssh root@YOUR_SERVER_IP
 apt update && apt install nginx -y
 ```
 
-Visiting `http://YOUR_SERVER_IP` should now show the nginx welcome page.
-
-### 3. Copy the build to the server
+#### 3. Copy the build to the server
 
 Run this on your **local machine**:
 
@@ -225,7 +277,7 @@ ssh root@YOUR_SERVER_IP "mkdir -p /var/www/heizlast"
 scp -r dist/* root@YOUR_SERVER_IP:/var/www/heizlast/
 ```
 
-### 4. Configure nginx
+#### 4. Configure nginx
 
 On the server, create `/etc/nginx/sites-available/heizlast`:
 
@@ -251,9 +303,7 @@ nginx -t
 systemctl reload nginx
 ```
 
-The app is now available at `http://YOUR_SERVER_IP`.
-
-### 5. Add a domain and HTTPS (recommended)
+#### 5. Add a domain and HTTPS (recommended)
 
 Point an **A record** for your domain to the server IP at your domain registrar, then:
 
@@ -264,7 +314,7 @@ certbot --nginx -d your-domain.com
 
 Certbot configures HTTPS automatically and renews the certificate for free via Let's Encrypt.
 
-### Updating
+#### Updating
 
 Rebuild locally and re-copy — no server restart required:
 
@@ -278,4 +328,5 @@ scp -r dist/* root@YOUR_SERVER_IP:/var/www/heizlast/
 - **Multi-storey buildings are supported.** Inter-floor adjacency (ceiling/floor surfaces between storeys) is computed automatically from room polygon intersection. The Sutherland–Hodgman algorithm is exact for convex rooms; non-convex rooms are handled approximately.
 - **No thermal bridges (Wärmebrücken).** Noted in the PDF report footer.
 - No solar gains or internal gains.
+- Ground floor heat loss uses a simplified fixed fij = 0.45; the detailed ground calculation per EN ISO 13370 is not implemented.
 - Fully static — no backend, all data persisted in `localStorage`.
