@@ -586,9 +586,30 @@ export function calculateHeizlast(project: Project): HeizlastResult {
     return { hullId: hull.id, hullName: hull.name, totalTransmissionLoss: total, totalArea: area, shareOfBuildingTotal: buildingTotal > 0 ? total / buildingTotal : 0 };
   });
 
+  // ── Gaussian error propagation (systematic / correlated model) ───────────
+  let sigmaW: number | undefined;
+  if (project.uncertainty) {
+    const { uRelPct, aRelPct, nRelPct } = project.uncertainty;
+    const eU = uRelPct / 100;
+    const eA = aRelPct / 100;
+    const eN = nRelPct / 100;
+    const combT = Math.sqrt(eU * eU + eA * eA); // combined relative σ for transmission
+    const combV = Math.sqrt(eN * eN + eA * eA); // combined relative σ for ventilation
+
+    for (const rr of roomResults) {
+      const { transmissionLoss, ventilationLoss } = rr.result;
+      rr.result.sigmaW = Math.abs(transmissionLoss) * combT
+                       + Math.abs(ventilationLoss)  * combV;
+    }
+
+    // Building level: only count losses to the outside (interior walls cancel)
+    const phiTExt = lossByCategory.exterior + lossByCategory.ground + lossByCategory.adjNeighbor;
+    sigmaW = Math.abs(phiTExt) * combT + Math.abs(lossByCategory.ventilation) * combV;
+  }
+
   return {
     rooms: roomResults, buildingTotal, specificHeatLoad,
     designHeatLoad, designSpecificHeatLoad, lossByCategory,
-    designTemperature: tE, plz: project.plz, hullSummary,
+    designTemperature: tE, plz: project.plz, hullSummary, sigmaW,
   };
 }

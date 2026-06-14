@@ -42,8 +42,12 @@ export function renderReport(
   wrap.appendChild(summarySection);
 
   const kpis = el('div', { class: 'rp-kpis' });
+  const phiHLkW = (result.designHeatLoad / 1000).toFixed(2);
+  const phiHLText = result.sigmaW
+    ? `${phiHLkW} ± ${(result.sigmaW / 1000).toFixed(2)} kW`
+    : `${phiHLkW} kW`;
   const kpiItems: [string, string][] = [
-    [`${(result.designHeatLoad / 1000).toFixed(2)} kW`, 'Φ<sub>HL</sub> gesamt'],
+    [phiHLText, 'Φ<sub>HL</sub> gesamt'],
     [`${result.designSpecificHeatLoad.toFixed(0)} W/m²`, 'Spezifisch'],
     [`${result.designTemperature} °C`, 'θ<sub>e</sub> Norm'],
   ];
@@ -151,11 +155,14 @@ function renderRoomDetail(
     ? `≈${res.effectiveTemperature.toFixed(1)} °C`
     : `${room.designTemperature} °C`;
 
+  const phiHLRoom = res.sigmaW
+    ? `${Math.round(res.totalLoss)} ± ${Math.round(res.sigmaW)} W`
+    : `${Math.round(res.totalLoss)} W`;
   const kpiData: [string, string][] = [
     [`${area.toFixed(1)} m²`,       'Fläche'],
     [tempDisplay,                    isUnheated ? 'θ<sub>eq</sub>' : 'θ<sub>i</sub>'],
     [`${res.volume.toFixed(1)} m³`,  'Volumen'],
-    [`${Math.round(res.totalLoss)} W`,         'Φ<sub>HL</sub>'],
+    [phiHLRoom,                      'Φ<sub>HL</sub>'],
     [`${Math.round(res.transmissionLoss)} W`,   'Φ<sub>T</sub>'],
     [`${Math.round(res.ventilationLoss)} W`,    'Φ<sub>V</sub>'],
     [`${spec.toFixed(0)} W/m²`,     'Spezif.'],

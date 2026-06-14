@@ -88,6 +88,12 @@ export interface Room {
   floorUValue?: number;
 }
 
+export interface ProjectUncertainty {
+  uRelPct: number; // % — relative uncertainty on U-values
+  aRelPct: number; // % — relative uncertainty on areas
+  nRelPct: number; // % — relative uncertainty on air-change rates
+}
+
 export interface HullGroup {
   id: string;
   name: string;
@@ -114,6 +120,7 @@ export interface Project {
   allowHeatGains?: boolean;     // non-norm: count warmer-neighbour fluxes as gains
   floors: Floor[];
   hullGroups: HullGroup[];
+  uncertainty?: ProjectUncertainty;
   createdAt: string;
   updatedAt: string;
 }
@@ -140,6 +147,7 @@ export interface RoomHeizlastResult {
   nMin: number;               // h⁻¹ (applied air change rate)
   effectiveTemperature: number; // °C — design temp for heated/reduced; equilibrium for unheated
   elementBreakdown: ElementHeatLoss[];
+  sigmaW?: number;            // W — 1σ uncertainty (Gaussian error propagation)
 }
 
 export interface HullSummaryEntry {
@@ -166,4 +174,5 @@ export interface HeizlastResult {
   designTemperature: number;  // °C
   plz: string;
   hullSummary: HullSummaryEntry[];
+  sigmaW?: number;            // W — 1σ uncertainty on designHeatLoad
 }
