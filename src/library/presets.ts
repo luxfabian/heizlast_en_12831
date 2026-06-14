@@ -173,3 +173,26 @@ export const DEFAULT_WALL_PRESET_ID    = 'aw_neubau';
 export const DEFAULT_WINDOW_PRESET_ID  = 'win_triple_120x140';
 export const DEFAULT_DOOR_PRESET_ID    = 'door_ext_100';
 export const DEFAULT_GARAGE_PRESET_ID  = 'garage_240x200';
+
+/** All built-in preset IDs (used by Materialien view). Ceilings are excluded — not in the left panel. */
+export const ALL_PRESET_IDS: string[] = [
+  ...WALL_PRESETS.map(p => p.id),
+  ...WINDOW_PRESETS.map(p => p.id),
+  ...DOOR_PRESETS.map(p => p.id),
+  ...GARAGE_PRESETS.map(p => p.id),
+  ...FLOOR_PRESETS.map(p => p.id),
+];
+
+/** Default active preset IDs for a new project — a lean, representative selection */
+export const DEFAULT_ACTIVE_PRESET_IDS: string[] = [
+  // Walls: coverage from KfW new-build to pre-war stock + interior + basement
+  'aw_kfw40', 'aw_neubau', 'aw_1984_1994', 'aw_altbau', 'iw_std', 'keller',
+  // Windows: one per glazing era
+  'win_triple_100x120', 'win_triple_120x140', 'win_double_100x120', 'win_old_80x120',
+  // Doors: standard interior + exterior
+  'door_int_87', 'door_ext_100',
+  // Garage: one standard uninsulated
+  'garage_250x225',
+  // Floors: new build, existing, and intermediate floor
+  'floor_neubau', 'floor_2002', 'floor_altbau', 'floor_above',
+];

@@ -11,6 +11,7 @@ import { renderGraph } from './ui/graphView.js';
 import { renderReport } from './ui/reportView.js';
 import { renderSettingsView } from './ui/settingsView.js';
 import { renderImpressumView } from './ui/impressumView.js';
+import { renderMaterialsView } from './ui/materialsView.js';
 import { createExampleProject } from './ui/exampleProject.js';
 import { calculateHeizlast } from './calc/heizlast.js';
 import { exportPdf } from './ui/pdfExport.js';
@@ -160,15 +161,17 @@ const sankeyView       = document.getElementById('sankey-view')!;
 const graphView        = document.getElementById('graph-view')!;
 const reportView       = document.getElementById('report-view')!;
 const settingsViewEl   = document.getElementById('settings-view')!;
+const materialsViewEl  = document.getElementById('materials-view')!;
 const impressumViewEl  = document.getElementById('impressum-view')!;
 const viewPlanBtn      = document.getElementById('view-plan-btn')!;
 const viewSankeyBtn    = document.getElementById('view-sankey-btn')!;
 const viewGraphBtn     = document.getElementById('view-graph-btn')!;
 const viewReportBtn    = document.getElementById('view-report-btn')!;
 const viewSettingsBtn  = document.getElementById('view-settings-btn')!;
+const viewMaterialsBtn = document.getElementById('view-materials-btn')!;
 const viewImpressumBtn = document.getElementById('view-impressum-btn')!;
 
-type ViewName = 'plan' | 'sankey' | 'graph' | 'report' | 'settings' | 'impressum';
+type ViewName = 'plan' | 'sankey' | 'graph' | 'report' | 'settings' | 'materials' | 'impressum';
 
 function activateView(view: ViewName): void {
   canvasContainer.style.display  = 'none';
@@ -176,12 +179,14 @@ function activateView(view: ViewName): void {
   graphView.style.display        = 'none';
   reportView.style.display       = 'none';
   settingsViewEl.style.display   = 'none';
+  materialsViewEl.style.display  = 'none';
   impressumViewEl.style.display  = 'none';
   viewPlanBtn.classList.remove('active');
   viewSankeyBtn.classList.remove('active');
   viewGraphBtn.classList.remove('active');
   viewReportBtn.classList.remove('active');
   viewSettingsBtn.classList.remove('active');
+  viewMaterialsBtn.classList.remove('active');
   viewImpressumBtn.classList.remove('active');
 
   const state = editor.getState();
@@ -205,6 +210,10 @@ function activateView(view: ViewName): void {
     settingsViewEl.style.display = 'flex';
     viewSettingsBtn.classList.add('active');
     renderSettingsView(settingsViewEl, editor.getProject() as Project, editor);
+  } else if (view === 'materials') {
+    materialsViewEl.style.display = 'flex';
+    viewMaterialsBtn.classList.add('active');
+    renderMaterialsView(materialsViewEl, editor);
   } else {
     impressumViewEl.style.display = 'flex';
     viewImpressumBtn.classList.add('active');
@@ -212,10 +221,13 @@ function activateView(view: ViewName): void {
   }
 }
 
-// Re-render settings view live when project changes and it is visible
+// Re-render live when project changes and view is visible
 editor.onChange(() => {
   if (settingsViewEl.style.display !== 'none') {
     renderSettingsView(settingsViewEl, editor.getProject() as Project, editor);
+  }
+  if (materialsViewEl.style.display !== 'none') {
+    renderMaterialsView(materialsViewEl, editor);
   }
 });
 
@@ -224,6 +236,7 @@ viewSankeyBtn.addEventListener('click',    () => activateView('sankey'));
 viewGraphBtn.addEventListener('click',     () => activateView('graph'));
 viewReportBtn.addEventListener('click',    () => activateView('report'));
 viewSettingsBtn.addEventListener('click',  () => activateView('settings'));
+viewMaterialsBtn.addEventListener('click', () => activateView('materials'));
 viewImpressumBtn.addEventListener('click', () => activateView('impressum'));
 
 // ---- Toolbar tools ----

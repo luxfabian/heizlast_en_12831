@@ -1,4 +1,5 @@
 import type { Editor } from '../editor/editorState.js';
+import type { Project } from '../model/types.js';
 import { WALL_PRESETS, WINDOW_PRESETS, DOOR_PRESETS, GARAGE_PRESETS, FLOOR_PRESETS } from '../library/presets.js';
 import type { WallTypePreset, OpeningTypePreset, CeilingTypePreset } from '../library/presets.js';
 import { loadCustomPresets, addCustomWallPreset, addCustomOpeningPreset, addCustomFloorPreset, removeCustomPreset } from '../library/customPresets.js';
@@ -92,8 +93,13 @@ function makePresetRow(
 
 export function renderLibraryPanel(container: HTMLElement, editor: Editor): void {
   container.innerHTML = '';
-  const state  = editor.getState();
-  const custom = loadCustomPresets();
+  const state   = editor.getState();
+  const custom  = loadCustomPresets();
+  const project = editor.getProject() as Project;
+  // undefined = legacy project: show all built-ins. Otherwise filter.
+  const activeIds = project.activePresetIds !== undefined ? new Set(project.activePresetIds) : null;
+  const keepBuiltin = <T extends { id: string }>(presets: T[]): T[] =>
+    activeIds ? presets.filter(p => activeIds.has(p.id)) : presets;
 
   // ── Walls ─────────────────────────────────────────────
   const { section: wallSec, body: wallBody } = makeSection('walls', 'Wandtypen', () =>
@@ -102,7 +108,7 @@ export function renderLibraryPanel(container: HTMLElement, editor: Editor): void
   container.appendChild(wallSec);
   const customWallIds = new Set(custom.walls.map(p => p.id));
   const allWalls: (WallTypePreset & { isCustom?: boolean })[] = [
-    ...WALL_PRESETS.filter(p => !customWallIds.has(p.id)),
+    ...keepBuiltin(WALL_PRESETS.filter(p => !customWallIds.has(p.id))),
     ...custom.walls.map(p => ({ ...p, isCustom: true })),
   ];
   for (const p of allWalls) {
@@ -127,21 +133,21 @@ export function renderLibraryPanel(container: HTMLElement, editor: Editor): void
     openAddDialog('window', editor)
   );
   container.appendChild(winSec);
-  renderOpeningSection(winBody, WINDOW_PRESETS, custom.windows, state.activeWindowPresetId, editor);
+  renderOpeningSection(winBody, keepBuiltin(WINDOW_PRESETS), custom.windows, state.activeWindowPresetId, editor);
 
   // ── Doors ─────────────────────────────────────────────
   const { section: doorSec, body: doorBody } = makeSection('doors', 'Türen', () =>
     openAddDialog('door', editor)
   );
   container.appendChild(doorSec);
-  renderOpeningSection(doorBody, DOOR_PRESETS, custom.doors, state.activeDoorPresetId, editor);
+  renderOpeningSection(doorBody, keepBuiltin(DOOR_PRESETS), custom.doors, state.activeDoorPresetId, editor);
 
   // ── Garage doors ──────────────────────────────────────
   const { section: garSec, body: garBody } = makeSection('garageDoors', 'Garagentore', () =>
     openAddDialog('garage_door', editor)
   );
   container.appendChild(garSec);
-  renderOpeningSection(garBody, GARAGE_PRESETS, custom.garageDoors, state.activeGaragePresetId, editor);
+  renderOpeningSection(garBody, keepBuiltin(GARAGE_PRESETS), custom.garageDoors, state.activeGaragePresetId, editor);
 
   // ── Floor types ───────────────────────────────────────
   const { section: floorSec, body: floorBody } = makeSection('floors', 'Bodenaufbauten', () =>
@@ -150,7 +156,7 @@ export function renderLibraryPanel(container: HTMLElement, editor: Editor): void
   container.appendChild(floorSec);
   const customFloorIds = new Set(custom.floors.map(p => p.id));
   const allFloors: (CeilingTypePreset & { isCustom?: boolean })[] = [
-    ...FLOOR_PRESETS.filter(p => !customFloorIds.has(p.id)),
+    ...keepBuiltin(FLOOR_PRESETS.filter(p => !customFloorIds.has(p.id))),
     ...custom.floors.map(p => ({ ...p, isCustom: true })),
   ];
   for (const p of allFloors) {

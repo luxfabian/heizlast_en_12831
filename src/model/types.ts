@@ -121,6 +121,8 @@ export interface Project {
   floors: Floor[];
   hullGroups: HullGroup[];
   uncertainty?: ProjectUncertainty;
+  /** IDs of built-in presets shown in the left library panel. undefined = show all (legacy). */
+  activePresetIds?: string[];
   createdAt: string;
   updatedAt: string;
 }

@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from '../utils/uuid.js';
 import type { Project, HullGroup, Floor } from './types.js';
-import { getWallPreset, DEFAULT_WALL_PRESET_ID } from '../library/presets.js';
+import { getWallPreset, DEFAULT_WALL_PRESET_ID, DEFAULT_ACTIVE_PRESET_IDS } from '../library/presets.js';
 
 export const DEFAULT_HULL_GROUPS: Omit<HullGroup, 'id'>[] = [
   { name: 'Außenhülle',            categories: ['exterior'],                                               isDefault: true },
@@ -29,6 +29,7 @@ export function createDefaultProject(name = 'Neues Projekt'): Project {
     plz: '',
     floors: [createDefaultFloor()],
     hullGroups: DEFAULT_HULL_GROUPS.map(g => ({ ...g, id: uuidv4() })),
+    activePresetIds: [...DEFAULT_ACTIVE_PRESET_IDS],
     createdAt: now,
     updatedAt: now,
   };
