@@ -113,7 +113,7 @@ function renderDetailPanel(
   const catTable = el('table', { class: 'rb-table' });
   const { exterior, ground, adjNeighbor, ventilation } = result.lossByCategory;
   const catRows: [string, number][] = [
-    ['Außenluft / Unbeheizt', exterior],
+    ['Außenluft', exterior],
     ['Erdreich', ground],
     ['Nachbargebäude', adjNeighbor],
     ['Lüftung', ventilation],
@@ -419,7 +419,7 @@ export function renderSankey(container: HTMLElement, result: HeizlastResult, pro
   // ── Category definitions ──────────────────────────────────────────────────
   interface CatDef { key: string; label: string; color: string; total: number }
   const allCats: CatDef[] = [
-    { key: 'exterior', label: 'Außenluft / Unbeheizt', color: '#ef4444', total: result.lossByCategory.exterior },
+    { key: 'exterior', label: 'Außenluft', color: '#ef4444', total: result.lossByCategory.exterior },
     { key: 'ground',   label: 'Erdreich',              color: '#f97316', total: result.lossByCategory.ground },
     { key: 'neighbor', label: 'Nachbargebäude',        color: '#a855f7', total: result.lossByCategory.adjNeighbor },
     { key: 'vent',     label: 'Lüftung',               color: '#06b6d4', total: result.lossByCategory.ventilation },
