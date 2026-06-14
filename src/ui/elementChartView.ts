@@ -60,20 +60,42 @@ function buildBars(result: HeizlastResult, project: Project, filterRoomId: strin
 
 // ── CAD preview helpers ───────────────────────────────────────────────────────
 
-function findFloor(project: Project, elementId: string, elementType: string): FloorType | null {
+/**
+ * Floor/ceiling elementIds in HeizlastResult use the composite format
+ * "${room.id}_floor_${index}" / "${room.id}_ceiling_${index}" rather than
+ * the surface UUID, so we parse the room ID out of the string.
+ */
+function parseSurfaceRoomId(elementId: string, type: 'floor' | 'ceiling'): string | null {
+  const sep = type === 'floor' ? '_floor_' : '_ceiling_';
+  const idx = elementId.lastIndexOf(sep);
+  if (idx < 0) return null;
+  const maybeIndex = elementId.slice(idx + sep.length);
+  if (!/^\d+$/.test(maybeIndex)) return null;
+  return elementId.slice(0, idx);
+}
+
+interface ElementLocation {
+  floor: FloorType;
+  roomId?: string; // set for floor/ceiling — used to highlight the owning room
+}
+
+function locateElement(project: Project, elementId: string, elementType: string): ElementLocation | null {
   for (const floor of project.floors) {
-    if (elementType === 'wall' && floor.walls.some(w => w.id === elementId)) return floor;
+    if (elementType === 'wall' && floor.walls.some(w => w.id === elementId))
+      return { floor };
     if (['window', 'door', 'garage_door'].includes(elementType)
-        && floor.openings.some(o => o.id === elementId)) return floor;
-    if (elementType === 'floor'
-        && floor.rooms.some(r => r.floors?.some(s => s.id === elementId))) return floor;
-    if (elementType === 'ceiling'
-        && floor.rooms.some(r => r.ceilings?.some(s => s.id === elementId))) return floor;
+        && floor.openings.some(o => o.id === elementId))
+      return { floor };
+    if (elementType === 'floor' || elementType === 'ceiling') {
+      const roomId = parseSurfaceRoomId(elementId, elementType as 'floor' | 'ceiling');
+      if (roomId && floor.rooms.some(r => r.id === roomId))
+        return { floor, roomId };
+    }
   }
   return null;
 }
 
-function elementCenter(floor: FloorType, elementId: string, elementType: string): { x: number; y: number } | null {
+function elementCenter(floor: FloorType, elementId: string, elementType: string, roomId?: string): { x: number; y: number } | null {
   if (elementType === 'wall') {
     const w = floor.walls.find(w => w.id === elementId);
     if (w) return { x: (w.start.x + w.end.x) / 2, y: (w.start.y + w.end.y) / 2 };
@@ -92,16 +114,16 @@ function elementCenter(floor: FloorType, elementId: string, elementType: string)
       }
     }
   }
-  for (const room of floor.rooms) {
-    const surfs = elementType === 'floor' ? room.floors : room.ceilings;
-    if (surfs?.some(s => s.id === elementId)) {
-      const ws = room.wallIds.map(id => floor.walls.find(w => w.id === id)).filter(Boolean);
-      if (ws.length) {
-        const xs = ws.flatMap(w => [w!.start.x, w!.end.x]);
-        const ys = ws.flatMap(w => [w!.start.y, w!.end.y]);
-        return { x: (Math.min(...xs) + Math.max(...xs)) / 2,
-                 y: (Math.min(...ys) + Math.max(...ys)) / 2 };
-      }
+  // For floor/ceiling: use the room centroid (bounding-box midpoint of its walls)
+  const rid = roomId ?? null;
+  const room = rid ? floor.rooms.find(r => r.id === rid) : null;
+  if (room) {
+    const ws = room.wallIds.map(id => floor.walls.find(w => w.id === id)).filter(Boolean);
+    if (ws.length) {
+      const xs = ws.flatMap(w => [w!.start.x, w!.end.x]);
+      const ys = ws.flatMap(w => [w!.start.y, w!.end.y]);
+      return { x: (Math.min(...xs) + Math.max(...xs)) / 2,
+               y: (Math.min(...ys) + Math.max(...ys)) / 2 };
     }
   }
   return null;
@@ -112,6 +134,7 @@ function paintPreview(
   floor: FloorType,
   entry: BarEntry,
   result: HeizlastResult,
+  roomId?: string,
 ): void {
   const dpr = window.devicePixelRatio || 1;
   const W   = canvas.width  / dpr;
@@ -134,6 +157,7 @@ function paintPreview(
     offsetY: H / 2 - (minY + maxY) / 2 * scale,
   };
 
+  const isSurface = entry.elementType === 'floor' || entry.elementType === 'ceiling';
   const state: RenderState = {
     showHeatMap:        false,
     showBoundaryLabels: false,
@@ -143,6 +167,7 @@ function paintPreview(
     selectedWallId:     entry.elementType === 'wall' ? entry.elementId : undefined,
     selectedOpeningId:  ['window', 'door', 'garage_door'].includes(entry.elementType)
                           ? entry.elementId : undefined,
+    selectedRoomId:     isSurface ? roomId : undefined,
     heizlastResult:     result,
   };
 
@@ -151,7 +176,7 @@ function paintPreview(
   renderFloor(ctx, floor, vp, state, W, H);
 
   // Amber crosshair on element center
-  const ctr = elementCenter(floor, entry.elementId, entry.elementType);
+  const ctr = elementCenter(floor, entry.elementId, entry.elementType, roomId);
   if (ctr) {
     const cx = ctr.x * scale + vp.offsetX;
     const cy = ctr.y * scale + vp.offsetY;
@@ -407,16 +432,16 @@ export function renderElementChart(
   function updatePreview(idx: number): void {
     if (idx < 0 || idx >= bars.length) return;
     const entry = bars[idx];
-    const floor = findFloor(project, entry.elementId, entry.elementType);
-    if (!floor) return;
+    const loc = locateElement(project, entry.elementId, entry.elementType);
+    if (!loc) return;
 
     const floorLabelEl = previewPanel.querySelector<HTMLElement>('#prev-floor-label');
-    if (floorLabelEl) floorLabelEl.textContent = floor.label;
+    if (floorLabelEl) floorLabelEl.textContent = loc.floor.label;
 
     prevPlaceholder.style.display = 'none';
     prevCanvas.style.display = 'block';
     prevInfo.style.display = 'block';
-    paintPreview(prevCanvas, floor, entry, result);
+    paintPreview(prevCanvas, loc.floor, entry, result, loc.roomId);
     prevInfo.textContent = `${entry.name}  ·  ${Math.round(entry.heatLoss)} W`;
   }
 
