@@ -11,6 +11,7 @@ import { renderGraph } from './ui/graphView.js';
 import { renderReport } from './ui/reportView.js';
 import { renderSettingsView } from './ui/settingsView.js';
 import { renderImpressumView } from './ui/impressumView.js';
+import { createExampleProject } from './ui/exampleProject.js';
 import { calculateHeizlast } from './calc/heizlast.js';
 import { exportPdf } from './ui/pdfExport.js';
 import type { Project, Room } from './model/types.js';
@@ -250,6 +251,17 @@ document.getElementById('new-btn')?.addEventListener('click', () => {
   viewReportBtn.setAttribute('disabled', '');
   activateView('plan');
   activateTool('select');
+});
+
+// Load example project
+document.getElementById('example-btn')?.addEventListener('click', () => {
+  if (!confirm(
+    'Beispielprojekt laden?\n\n' +
+    'Das aktuelle Projekt wird unwiderruflich überschrieben.\n' +
+    'Nicht gespeicherte Änderungen gehen verloren.'
+  )) return;
+  saveProject(createExampleProject() as Project);
+  location.reload();
 });
 
 // Dialog close / cancel
