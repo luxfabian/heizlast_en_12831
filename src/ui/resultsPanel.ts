@@ -25,6 +25,13 @@ export function renderResultsBench(
   const kw = (result.designHeatLoad / 1000).toFixed(1);
   totalEl.textContent = `${kw} kW`;
 
+  const sigmaEl = document.getElementById('rb-sigma');
+  if (sigmaEl) {
+    sigmaEl.textContent = result.sigmaW && result.sigmaW > 0
+      ? `± ${(result.sigmaW / 1000).toFixed(1)} kW`
+      : '';
+  }
+
   const spec = result.designSpecificHeatLoad;
   specificEl.textContent = `${spec.toFixed(0)} W/m²`;
   specificEl.style.color = spec > 100 ? 'var(--red)' : '';
