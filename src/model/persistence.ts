@@ -69,6 +69,21 @@ export function migrateProject(p: unknown): Project {
 
   if (!Array.isArray(proj.hullGroups)) {
     proj.hullGroups = DEFAULT_HULL_GROUPS.map(g => ({ ...g, id: uuidv4() }));
+  } else {
+    // Rename outdated default hull group names to current convention
+    const RENAMES: Record<string, string> = {
+      'Außenhülle (netto)':      'Außenhülle',
+      'Außenhülle netto':        'Außenhülle',
+      'Außenhülle + Erdreich':   'Äußere Gesamthülle',
+      'Außenhülle mit Erdreich': 'Äußere Gesamthülle',
+      'Gesamthülle (thermisch)': 'Thermische Gesamthülle',
+      'Innenwände (beheizt)':    'Beheizte Innenflächen',
+      'Innenwände beheizt':      'Beheizte Innenflächen',
+      'Beheizte Innenwände':     'Beheizte Innenflächen',
+    };
+    for (const hg of proj.hullGroups as Record<string, unknown>[]) {
+      if (typeof hg.name === 'string' && RENAMES[hg.name]) hg.name = RENAMES[hg.name];
+    }
   }
 
   if (!proj.id)        proj.id        = uuidv4();

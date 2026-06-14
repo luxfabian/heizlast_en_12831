@@ -81,7 +81,7 @@ function el<K extends keyof HTMLElementTagNameMap>(
   return e;
 }
 
-const BOUNDARY_CATS: BoundaryCategory[] = ['exterior', 'adj_heated', 'adj_reduced', 'ground', 'unheated'];
+const BOUNDARY_CATS: BoundaryCategory[] = ['exterior', 'adj_heated', 'adj_reduced', 'ground', 'unheated', 'adj_neighbor'];
 
 function renderDetailPanel(
   container: HTMLElement,
@@ -328,7 +328,7 @@ export function renderHullGroupEditor(
   result: HeizlastResult,
 ): void {
   const hullTable = el('table', { class: 'rb-table rb-hull-table' });
-  hullTable.innerHTML = `<thead><tr><th>Hüllgruppe</th><th>A (m²)</th><th>ΦT (W)</th><th>Anteil</th></tr></thead>`;
+  hullTable.innerHTML = `<thead><tr><th>Hüllgruppe</th><th class="rb-num">A (m²)</th><th class="rb-num">Φ<sub>T</sub> (W)</th><th class="rb-num">Anteil</th></tr></thead>`;
   const tb = el('tbody', {});
   for (const he of result.hullSummary) {
     const tr = el('tr', {});

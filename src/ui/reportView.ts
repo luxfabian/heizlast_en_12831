@@ -66,13 +66,12 @@ export function renderReport(
   </tr></thead>`;
   const catTbody = el('tbody', {});
   const catRows: [string, number][] = [
-    ['Außenluft / Nachbargbd.', result.lossByCategory.exterior],
-    ['Erdreich',               result.lossByCategory.ground],
-    ['Nachbargebäude',         result.lossByCategory.adjNeighbor],
-    ['Lüftung',                result.lossByCategory.ventilation],
+    ['Außenluft',       result.lossByCategory.exterior],
+    ['Erdreich',        result.lossByCategory.ground],
+    ['Nachbargebäude',  result.lossByCategory.adjNeighbor],
+    ['Lüftungsverlust', result.lossByCategory.ventilation],
   ];
   for (const [label, w] of catRows) {
-    if (w <= 0.5) continue;
     const tr = el('tr', {});
     tr.innerHTML = `<td>${label}</td>
       <td class="rp-num">${Math.round(w)}</td>
@@ -177,7 +176,7 @@ function renderRoomDetail(
   const adjEntries = res.elementBreakdown.filter(e => e.adjacentRoomId);
   if (adjEntries.length > 0) {
     const adjSection = el('div', { class: 'rp-section' });
-    adjSection.appendChild(el('div', { class: 'rp-section-title' }, 'Angrenzende Räume (erkannt)'));
+    adjSection.appendChild(el('div', { class: 'rp-section-title' }, 'Erkannte Nachbarräume'));
 
     type AdjData = { cat: BoundaryCategory; loss: number; area: number };
     const adjMap = new Map<string, AdjData>();
@@ -213,7 +212,7 @@ function renderRoomDetail(
 
   // ── Surface-by-surface breakdown ─────────────────────────────────
   const surfSection = el('div', { class: 'rp-section' });
-  surfSection.appendChild(el('div', { class: 'rp-section-title' }, 'Flächen und Wärmeflüsse'));
+  surfSection.appendChild(el('div', { class: 'rp-section-title' }, 'Thermische Flächenbilanz'));
 
   const surfTable = el('table', { class: 'rp-table rp-surf-table' });
   surfTable.innerHTML = `<thead><tr>
@@ -251,7 +250,7 @@ function renderRoomDetail(
   }
 
   const tTr = el('tr', { class: 'rp-total-row' });
-  tTr.innerHTML = `<td colspan="6">Φ<sub>T</sub> Transmission gesamt</td>
+  tTr.innerHTML = `<td colspan="6">Gesamte Transmission Φ<sub>T</sub></td>
     <td class="rp-num"><strong>${Math.round(res.transmissionLoss)}</strong></td>`;
   surfTbody.appendChild(tTr);
   surfTable.appendChild(surfTbody);
@@ -260,13 +259,13 @@ function renderRoomDetail(
 
   // ── Ventilation ──────────────────────────────────────────────────
   const ventSection = el('div', { class: 'rp-section' });
-  ventSection.appendChild(el('div', { class: 'rp-section-title' }, 'Lüftung'));
+  ventSection.appendChild(el('div', { class: 'rp-section-title' }, 'Lüftungsverlust'));
   const ventTable = el('table', { class: 'rp-table' });
   const ventTbody = el('tbody', {});
   const ventRows: [string, string][] = [
-    ['Volumen V',                                    `${res.volume.toFixed(1)} m³`],
-    ['n<sub>Min</sub> (Mindestluftwechsel)',          `${res.nMin.toFixed(2)} h⁻¹`],
-    ['Φ<sub>V</sub> (Lüftungswärmeverlust)',         `${Math.round(res.ventilationLoss)} W`],
+    ['Raumvolumen V',                                `${res.volume.toFixed(1)} m³`],
+    ['Mindestluftwechsel n<sub>Min</sub>',           `${res.nMin.toFixed(2)} h⁻¹`],
+    ['Lüftungswärmeverlust Φ<sub>V</sub>',          `${Math.round(res.ventilationLoss)} W`],
   ];
   for (const [label, value] of ventRows) {
     const tr = el('tr', {});

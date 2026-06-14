@@ -3,10 +3,10 @@ import type { Project, HullGroup, Floor } from './types.js';
 import { getWallPreset, DEFAULT_WALL_PRESET_ID } from '../library/presets.js';
 
 export const DEFAULT_HULL_GROUPS: Omit<HullGroup, 'id'>[] = [
-  { name: 'Außenhülle (netto)',      categories: ['exterior'],                               isDefault: true },
-  { name: 'Außenhülle + Erdreich',   categories: ['exterior', 'ground'],                     isDefault: true },
-  { name: 'Gesamthülle (thermisch)', categories: ['exterior', 'ground', 'unheated', 'adj_reduced'], isDefault: true },
-  { name: 'Innenwände (beheizt)',    categories: ['adj_heated'],                              isDefault: true },
+  { name: 'Außenhülle',            categories: ['exterior'],                                               isDefault: true },
+  { name: 'Äußere Gesamthülle',    categories: ['exterior', 'ground'],                                    isDefault: true },
+  { name: 'Thermische Gesamthülle', categories: ['exterior', 'ground', 'unheated', 'adj_reduced', 'adj_neighbor'], isDefault: true },
+  { name: 'Beheizte Innenflächen', categories: ['adj_heated'],                                             isDefault: true },
 ];
 
 export function createDefaultFloor(): Floor {
