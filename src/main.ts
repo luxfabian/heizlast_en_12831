@@ -10,6 +10,7 @@ import { renderResultsBench, renderSankey } from './ui/resultsPanel.js';
 import { renderGraph } from './ui/graphView.js';
 import { renderReport } from './ui/reportView.js';
 import { renderSettingsView } from './ui/settingsView.js';
+import { renderImpressumView } from './ui/impressumView.js';
 import { calculateHeizlast } from './calc/heizlast.js';
 import { exportPdf } from './ui/pdfExport.js';
 import type { Project, Room } from './model/types.js';
@@ -158,13 +159,15 @@ const sankeyView       = document.getElementById('sankey-view')!;
 const graphView        = document.getElementById('graph-view')!;
 const reportView       = document.getElementById('report-view')!;
 const settingsViewEl   = document.getElementById('settings-view')!;
+const impressumViewEl  = document.getElementById('impressum-view')!;
 const viewPlanBtn      = document.getElementById('view-plan-btn')!;
 const viewSankeyBtn    = document.getElementById('view-sankey-btn')!;
 const viewGraphBtn     = document.getElementById('view-graph-btn')!;
 const viewReportBtn    = document.getElementById('view-report-btn')!;
 const viewSettingsBtn  = document.getElementById('view-settings-btn')!;
+const viewImpressumBtn = document.getElementById('view-impressum-btn')!;
 
-type ViewName = 'plan' | 'sankey' | 'graph' | 'report' | 'settings';
+type ViewName = 'plan' | 'sankey' | 'graph' | 'report' | 'settings' | 'impressum';
 
 function activateView(view: ViewName): void {
   canvasContainer.style.display  = 'none';
@@ -172,11 +175,13 @@ function activateView(view: ViewName): void {
   graphView.style.display        = 'none';
   reportView.style.display       = 'none';
   settingsViewEl.style.display   = 'none';
+  impressumViewEl.style.display  = 'none';
   viewPlanBtn.classList.remove('active');
   viewSankeyBtn.classList.remove('active');
   viewGraphBtn.classList.remove('active');
   viewReportBtn.classList.remove('active');
   viewSettingsBtn.classList.remove('active');
+  viewImpressumBtn.classList.remove('active');
 
   const state = editor.getState();
   if (view === 'plan') {
@@ -195,10 +200,14 @@ function activateView(view: ViewName): void {
     reportView.style.display = 'flex';
     viewReportBtn.classList.add('active');
     if (state.heizlastResult) renderReport(reportView, state.heizlastResult, editor.getProject() as Project, editor);
-  } else {
+  } else if (view === 'settings') {
     settingsViewEl.style.display = 'flex';
     viewSettingsBtn.classList.add('active');
     renderSettingsView(settingsViewEl, editor.getProject() as Project, editor);
+  } else {
+    impressumViewEl.style.display = 'flex';
+    viewImpressumBtn.classList.add('active');
+    renderImpressumView(impressumViewEl);
   }
 }
 
@@ -209,11 +218,12 @@ editor.onChange(() => {
   }
 });
 
-viewPlanBtn.addEventListener('click',     () => activateView('plan'));
-viewSankeyBtn.addEventListener('click',   () => activateView('sankey'));
-viewGraphBtn.addEventListener('click',    () => activateView('graph'));
-viewReportBtn.addEventListener('click',   () => activateView('report'));
-viewSettingsBtn.addEventListener('click', () => activateView('settings'));
+viewPlanBtn.addEventListener('click',      () => activateView('plan'));
+viewSankeyBtn.addEventListener('click',    () => activateView('sankey'));
+viewGraphBtn.addEventListener('click',     () => activateView('graph'));
+viewReportBtn.addEventListener('click',    () => activateView('report'));
+viewSettingsBtn.addEventListener('click',  () => activateView('settings'));
+viewImpressumBtn.addEventListener('click', () => activateView('impressum'));
 
 // ---- Toolbar tools ----
 function activateTool(tool: ToolMode): void {
@@ -331,6 +341,9 @@ document.getElementById('zoom-out')?.addEventListener('click', () =>
 document.getElementById('zoom-reset')?.addEventListener('click', () => {
   editor.resetViewport(canvas.width, canvas.height);
 });
+document.getElementById('zoom-fit')?.addEventListener('click', () => {
+  editor.fitToFloor(canvas.width, canvas.height);
+});
 
 // ---- Canvas events ----
 canvas.addEventListener('mousedown', e => {
@@ -376,12 +389,16 @@ window.addEventListener('keydown', e => {
   }
 
   if (!e.ctrlKey && !e.metaKey) {
-    switch (e.key.toLowerCase()) {
-      case 'q': activateTool('select'); break;
-      case 'w': activateTool('wall'); break;
-      case 'f': activateTool('window'); break;
-      case 't': activateTool('door'); break;
-      case 'g': activateTool('garage_door'); break;
+    if (e.shiftKey && e.key === 'F') {
+      editor.fitToFloor(canvas.width, canvas.height);
+    } else if (!e.shiftKey) {
+      switch (e.key.toLowerCase()) {
+        case 'q': activateTool('select'); break;
+        case 'w': activateTool('wall'); break;
+        case 'f': activateTool('window'); break;
+        case 't': activateTool('door'); break;
+        case 'g': activateTool('garage_door'); break;
+      }
     }
   }
   updateCursor();

@@ -44,6 +44,7 @@
         <div class="toolbar-group">
           <button class="btn btn-tab active" id="view-plan-btn" title="Grundriss (CAD-Ansicht)">Grundriss</button>
           <button class="btn btn-tab" id="view-settings-btn" title="Projekteinstellungen und Unsicherheitsanalyse">Einstellungen</button>
+          <button class="btn btn-tab" id="view-impressum-btn" title="Impressum und rechtliche Hinweise">Impressum</button>
         </div>
 
         <div class="toolbar-sep"></div>
@@ -110,6 +111,14 @@
             <svg class="tool-icon" viewBox="0 0 16 16" stroke="currentColor" fill="none" stroke-width="1.4">
               <circle cx="7" cy="7" r="5"/><line x1="10.5" y1="10.5" x2="14" y2="14"/>
               <line x1="7" y1="4.5" x2="7" y2="9.5"/><line x1="4.5" y1="7" x2="9.5" y2="7"/>
+            </svg>
+          </button>
+          <button class="btn" id="zoom-fit" title="Grundriss einpassen (Shift+F)">
+            <svg class="tool-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4">
+              <path d="M2 6 L2 2 L6 2"/>
+              <path d="M10 2 L14 2 L14 6"/>
+              <path d="M14 10 L14 14 L10 14"/>
+              <path d="M6 14 L2 14 L2 10"/>
             </svg>
           </button>
         </div>
@@ -211,6 +220,7 @@
               <kbd>G</kbd> Tor &nbsp;
               <kbd>Esc</kbd> Abbruch &nbsp;
               <kbd>Del</kbd> Löschen &nbsp;
+              <kbd>Shift+F</kbd> Einpassen &nbsp;
               <kbd>Ctrl+Z/Y</kbd> Undo/Redo
             </div>
           </div>
@@ -227,6 +237,9 @@
 
         <!-- Settings view -->
         <div id="settings-view" style="display:none"></div>
+
+        <!-- Impressum view -->
+        <div id="impressum-view" style="display:none"></div>
 
         <!-- Sidebar -->
         <div id="sidebar">

@@ -585,6 +585,27 @@ export class Editor {
     this.notify();
   }
 
+  fitToFloor(canvasW: number, canvasH: number): void {
+    const pts = this.floor.walls.flatMap(w => [w.start, w.end]);
+    if (pts.length === 0) return;
+    const minX = Math.min(...pts.map(p => p.x));
+    const maxX = Math.max(...pts.map(p => p.x));
+    const minY = Math.min(...pts.map(p => p.y));
+    const maxY = Math.max(...pts.map(p => p.y));
+    const ww = maxX - minX;
+    const wh = maxY - minY;
+    if (ww === 0 || wh === 0) return;
+    const pad = 0.12;
+    const scale = Math.max(0.01, Math.min(2.0,
+      Math.min(canvasW * (1 - 2 * pad) / ww, canvasH * (1 - 2 * pad) / wh)));
+    this.state.viewport = {
+      scale,
+      offsetX: canvasW / 2 - (minX + maxX) / 2 * scale,
+      offsetY: canvasH / 2 - (minY + maxY) / 2 * scale,
+    };
+    this.notify();
+  }
+
   addFloor(): void {
     const maxLevel = Math.max(...this.project.floors.map(f => f.level));
     const newIdx   = this.project.floors.length;

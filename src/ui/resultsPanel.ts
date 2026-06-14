@@ -488,6 +488,28 @@ export function renderSankey(container: HTMLElement, result: HeizlastResult, pro
     return e;
   };
 
+  // Like txt(), but segments may include subscript runs: {t: 'prefix', sub: 'subscript'}
+  type Seg = string | { t: string; sub: string };
+  const subTxt = (x: number, y: number, anchor: string, cls: string, segs: Seg[]) => {
+    const e = document.createElementNS(ns, 'text');
+    e.setAttribute('x', String(x)); e.setAttribute('y', String(y));
+    e.setAttribute('text-anchor', anchor); e.setAttribute('class', cls);
+    e.setAttribute('dominant-baseline', 'middle');
+    for (const seg of segs) {
+      if (typeof seg === 'string') {
+        e.appendChild(document.createTextNode(seg));
+      } else {
+        if (seg.t) e.appendChild(document.createTextNode(seg.t));
+        const ts = document.createElementNS(ns, 'tspan');
+        ts.setAttribute('baseline-shift', 'sub');
+        ts.setAttribute('font-size', '0.75em');
+        ts.textContent = seg.sub;
+        e.appendChild(ts);
+      }
+    }
+    return e;
+  };
+
   // ── Ribbons ───────────────────────────────────────────────────────────────
   const catOff  = catPos.map(() => 0);
   const roomOff = roomPos.map(() => 0);
@@ -559,9 +581,12 @@ export function renderSankey(container: HTMLElement, result: HeizlastResult, pro
 
   // ── Title + subtitle ──────────────────────────────────────────────────────
   svg.appendChild(txt(W / 2, 22, 'middle', 'Heizlastverteilung', 'sk-title'));
-  svg.appendChild(txt(W / 2, 38, 'middle',
-    `Gesamtheizlast ΦHL = ${(total / 1000).toFixed(2)} kW  ·  Normaussentemperatur θe = ${result.designTemperature} °C`,
-    'sk-subtitle'));
+  svg.appendChild(subTxt(W / 2, 38, 'middle', 'sk-subtitle', [
+    { t: 'Gesamtheizlast Φ', sub: 'HL' },
+    ` = ${(total / 1000).toFixed(2)} kW  ·  Normaussentemperatur θ`,
+    { t: '', sub: 'e' },
+    ` = ${result.designTemperature} °C`,
+  ]));
 
   container.appendChild(svg);
 }
