@@ -4,6 +4,7 @@ import type {
 } from '../model/types.js';
 import { getDesignTemperature } from '../climate/index.js';
 import { wallLength, polygonAreaM2 } from '../editor/geometry.js';
+import { buildActiveWallIds } from '../editor/adjacency.js';
 
 const DEFAULT_MIN_AIR_CHANGES = 0.5;
 const DEFAULT_U_FLOOR         = 0.25; // W/m²K
@@ -25,6 +26,7 @@ function adjTempFromWall(wall: WallSegment, tE: number, tGround: number): number
     case 'adj_neighbor': return wall.unheatedSpaceTemp ?? 15;
     case 'adj_heated':
     case 'adj_reduced':  return tE; // fallback — adjacentRoomId lookup done separately
+    case 'freestanding': return tE; // no boundary — zero heat loss handled by active-wall filter
   }
 }
 
@@ -39,6 +41,7 @@ function adjTempFromSurface(
     case 'ground':       return tGround;
     case 'unheated':     return s.unheatedSpaceTemp ?? tE;
     case 'adj_neighbor': return s.unheatedSpaceTemp ?? 15;
+    case 'freestanding': return tE;
   }
 }
 
@@ -54,6 +57,13 @@ function solveEquilibriumTemps(
   tE: number,
   tGround: number,
 ): Map<string, number> {
+  // Pre-build per-floor active-wall sets (iteratively prunes dangling chains).
+  const floorActiveWalls = new Map<string, Set<string>>();
+  for (const { floor } of unheatedRooms) {
+    if (!floorActiveWalls.has(floor.id))
+      floorActiveWalls.set(floor.id, buildActiveWallIds(floor));
+  }
+
   // Start: all rooms at design temp; unheated at tE as initial guess
   const temps = new Map<string, number>(allRooms.map(r => [r.id, r.designTemperature]));
   for (const { room } of unheatedRooms) temps.set(room.id, tE);
@@ -63,11 +73,13 @@ function solveEquilibriumTemps(
     for (const { room, floor } of unheatedRooms) {
       let uaSum  = 0;
       let uaTSum = 0;
+      const activeWalls = floorActiveWalls.get(floor.id)!;
 
-      // Walls and openings
+      // Walls and openings — skip dangling spur chains
       for (const wallId of room.wallIds) {
         const wall = floor.walls.find(w => w.id === wallId);
         if (!wall) continue;
+        if (!activeWalls.has(wall.id)) continue;
         const adjRoom = floor.rooms.find(r => r.id !== room.id && r.wallIds.includes(wall.id));
         const tAdj = adjRoom ? (temps.get(adjRoom.id) ?? tE) : adjTempFromWall(wall, tE, tGround);
         const netArea = wallNetAreaM2(wall, room.ceilingHeight, floor.openings, floor);
@@ -150,12 +162,14 @@ export function computeFij(params: {
       const tN = unheatedSpaceTemp ?? 15;
       return (tInt - tN) / denom;
     }
+    case 'freestanding': return 0;
   }
 }
 
 function getWallOpenings(wallId: string, openings: Opening[]): Opening[] {
   return openings.filter(o => o.wallId === wallId);
 }
+
 
 function openingAreaM2(o: Opening): number {
   return (o.width * o.height) / 1_000_000;
@@ -214,9 +228,12 @@ export function calculateRoomHeizlast(
   const tInt = room.designTemperature;
   const breakdown: ElementHeatLoss[] = [];
 
+  const activeWallIds = buildActiveWallIds(floor);
+
   for (const wallId of room.wallIds) {
     const wall = floor.walls.find(w => w.id === wallId);
     if (!wall) continue;
+    if (!activeWallIds.has(wall.id)) continue;
 
     const category = wall.boundaryCategory;
     const tAdj     = getAdjacentRoomTemp(wall, room.id, floor.rooms) ?? tE;

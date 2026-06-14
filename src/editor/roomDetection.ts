@@ -166,16 +166,35 @@ export function mergeDetectedRooms(
       // Always use the detected (pruned) wallIds so old spur data is cleaned up.
       updated.push({ ...existing, wallIds: d.wallIds, ceilings, floors, area: d.area });
     } else {
-      updated.push({
-        id: uuidv4(),
-        label: `Raum ${updated.length + 1}`,
-        wallIds: d.wallIds,
-        designTemperature: 20,
-        ceilingHeight: defaultCeilingHeight,
-        floors: [floorLevel > 0 ? defaultUpperFloor() : defaultFloor()],
-        ceilings: [defaultCeiling()],
-        area: d.area,
-      });
+      // No exact match. Check whether this detected region was carved out of an
+      // existing room by a new bisecting wall. If so, inherit its temperature and
+      // settings so that the bisecting wall sits between two same-temperature spaces
+      // and contributes zero net heat loss (fij = 0), rather than producing
+      // spurious heat loss via the default-temperature fallback.
+      const parent = existingRooms
+        .map(r => ({ r, n: d.wallIds.filter(id => r.wallIds.includes(id)).length }))
+        .reduce<{ r: Room | null; n: number }>((best, x) => x.n > best.n ? x : best, { r: null, n: 0 });
+
+      if (parent.n > 0 && parent.r) {
+        const ceilings: RoomCeiling[] = parent.r.ceilings?.length > 0
+          ? parent.r.ceilings
+          : [defaultCeiling()];
+        const floors: RoomFloor[] = parent.r.floors?.length > 0
+          ? parent.r.floors
+          : [migrateFloor(parent.r)];
+        updated.push({ ...parent.r, id: uuidv4(), wallIds: d.wallIds, ceilings, floors, area: d.area });
+      } else {
+        updated.push({
+          id: uuidv4(),
+          label: `Raum ${updated.length + 1}`,
+          wallIds: d.wallIds,
+          designTemperature: 20,
+          ceilingHeight: defaultCeilingHeight,
+          floors: [floorLevel > 0 ? defaultUpperFloor() : defaultFloor()],
+          ceilings: [defaultCeiling()],
+          area: d.area,
+        });
+      }
     }
   }
 

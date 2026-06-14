@@ -4,7 +4,8 @@ export type BoundaryCategory =
   | 'adj_reduced'
   | 'ground'
   | 'unheated'
-  | 'adj_neighbor';
+  | 'adj_neighbor'
+  | 'freestanding';
 
 export interface Point2D {
   x: number; // mm

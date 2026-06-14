@@ -767,27 +767,33 @@ function renderWallPanel(container: HTMLElement, wall: WallSegment, editor: Edit
   });
   sec.appendChild(field('Wandtyp', presetSel));
 
-  // Boundary category — only relevant for exterior walls
+  // Boundary category — only for exterior single-room walls; auto-set for others
   if (!isInterior) {
-    const catSel = el('select', { class: 'input' }) as HTMLSelectElement;
-    for (const cat of EXTERIOR_CATS) {
-      const opt = el('option', { value: cat }, getBoundaryCategoryLabel(cat)) as HTMLOptionElement;
-      if (cat === wall.boundaryCategory) opt.selected = true;
-      catSel.appendChild(opt);
-    }
-    catSel.addEventListener('change', () =>
-      editor.updateWall(wall.id, { boundaryCategory: catSel.value as BoundaryCategory })
-    );
-    sec.appendChild(field('Grenzkategorie', catSel));
+    if (wall.boundaryCategory === 'freestanding') {
+      const note = el('p', { class: 'prop-note' },
+        'Freistehend – kein Raumanschluss, kein Wärmeverlust');
+      sec.appendChild(note);
+    } else {
+      const catSel = el('select', { class: 'input' }) as HTMLSelectElement;
+      for (const cat of EXTERIOR_CATS) {
+        const opt = el('option', { value: cat }, getBoundaryCategoryLabel(cat)) as HTMLOptionElement;
+        if (cat === wall.boundaryCategory) opt.selected = true;
+        catSel.appendChild(opt);
+      }
+      catSel.addEventListener('change', () =>
+        editor.updateWall(wall.id, { boundaryCategory: catSel.value as BoundaryCategory })
+      );
+      sec.appendChild(field('Grenzkategorie', catSel));
 
-    if (wall.boundaryCategory === 'unheated') {
-      const utInp = numInput(wall.unheatedSpaceTemp ?? 4, -20, 30);
-      utInp.addEventListener('change', () => editor.updateWall(wall.id, { unheatedSpaceTemp: Number(utInp.value) }));
-      sec.appendChild(field('Temp. unbeheizter Raum (°C)', utInp));
-    } else if (wall.boundaryCategory === 'adj_neighbor') {
-      const ntInp = numInput(wall.unheatedSpaceTemp ?? 15, -20, 30);
-      ntInp.addEventListener('change', () => editor.updateWall(wall.id, { unheatedSpaceTemp: Number(ntInp.value) }));
-      sec.appendChild(field('Temp. Nachbargebäude (°C)', ntInp));
+      if (wall.boundaryCategory === 'unheated') {
+        const utInp = numInput(wall.unheatedSpaceTemp ?? 4, -20, 30);
+        utInp.addEventListener('change', () => editor.updateWall(wall.id, { unheatedSpaceTemp: Number(utInp.value) }));
+        sec.appendChild(field('Temp. unbeheizter Raum (°C)', utInp));
+      } else if (wall.boundaryCategory === 'adj_neighbor') {
+        const ntInp = numInput(wall.unheatedSpaceTemp ?? 15, -20, 30);
+        ntInp.addEventListener('change', () => editor.updateWall(wall.id, { unheatedSpaceTemp: Number(ntInp.value) }));
+        sec.appendChild(field('Temp. Nachbargebäude (°C)', ntInp));
+      }
     }
   }
 
