@@ -26,9 +26,24 @@ interface NodeElems {
   shortLabel: string;
 }
 
-const C_NEIGHBOR    = '#7c3aed';
-const C_ADJ_HEATED  = '#ea580c';
-const C_ADJ_REDUCED = '#dc2626';
+/**
+ * Maps t ∈ [0,1] to a blue→purple→red hex colour.
+ * Returns hex so SVG marker IDs stay valid.
+ */
+function heatColor(t: number): string {
+  const stops: [number, number, number][] = [
+    [ 37,  99, 235],  // blue-600
+    [147,  51, 234],  // violet-600
+    [220,  38,  38],  // red-600
+  ];
+  const seg = Math.min(Math.floor(t * 2), 1);
+  const u   = t * 2 - seg;
+  const c1  = stops[seg], c2 = stops[seg + 1];
+  const r   = Math.round(c1[0] + (c2[0] - c1[0]) * u);
+  const g   = Math.round(c1[1] + (c2[1] - c1[1]) * u);
+  const b   = Math.round(c1[2] + (c2[2] - c1[2]) * u);
+  return '#' + [r, g, b].map(v => v.toString(16).padStart(2, '0')).join('');
+}
 
 let _prevCleanup: (() => void) | null = null;
 
@@ -92,7 +107,7 @@ export function renderGraph(
     const nbr = rr.result.elementBreakdown
       .filter(e => e.boundaryCategory === 'adj_neighbor')
       .reduce((s, e) => s + e.heatLoss, 0);
-    if (nbr > 1) edges.push({ fromId: rr.roomId, toId: 'env:neighbor', flow: nbr, color: C_NEIGHBOR });
+    if (nbr > 1) edges.push({ fromId: rr.roomId, toId: 'env:neighbor', flow: nbr, color: '' });
   }
 
   const adjMap = new Map<string, GEdge>();
@@ -104,19 +119,33 @@ export function renderGraph(
       const key = `${rr.roomId}→${el.adjacentRoomId}`;
       const ex  = adjMap.get(key);
       if (ex) { ex.flow += el.heatLoss; }
-      else {
-        adjMap.set(key, {
-          fromId: rr.roomId, toId: el.adjacentRoomId, flow: el.heatLoss,
-          color: el.boundaryCategory === 'adj_reduced' ? C_ADJ_REDUCED : C_ADJ_HEATED,
-        });
-      }
+      else adjMap.set(key, { fromId: rr.roomId, toId: el.adjacentRoomId, flow: el.heatLoss, color: '' });
     }
   }
-
 
   for (const e of adjMap.values()) {
     if (nodeIdx.has(e.fromId) && nodeIdx.has(e.toId)) edges.push(e);
   }
+
+  // Assign heat-map colours now that all flows are known
+  const maxFlow = Math.max(...edges.map(e => e.flow), 1);
+  for (const e of edges) e.color = heatColor(e.flow / maxFlow);
+
+  // ── Graph statistics ──────────────────────────────────────────────────────
+
+  const ufParent = nodes.map((_, i) => i);
+  function ufFind(x: number): number {
+    while (ufParent[x] !== x) { ufParent[x] = ufParent[ufParent[x]]; x = ufParent[x]; }
+    return x;
+  }
+  for (const e of edges) {
+    const fi = nodeIdx.get(e.fromId), ti = nodeIdx.get(e.toId);
+    if (fi !== undefined && ti !== undefined) {
+      const ra = ufFind(fi), rb = ufFind(ti);
+      if (ra !== rb) ufParent[ra] = rb;
+    }
+  }
+  const compCount = new Set(nodes.map((_, i) => ufFind(i))).size;
 
   // ── Physics ───────────────────────────────────────────────────────────────
 
@@ -124,7 +153,6 @@ export function renderGraph(
   const SPRING_K       = 0.05;
   const GRAVITY        = 0.00;
   const DAMPING_SETTLE = 0.78;
-  const maxFlow = Math.max(...edges.map(e => e.flow), 1);
   const vx = nodes.map(() => 0);
   const vy = nodes.map(() => 0);
 
@@ -213,6 +241,15 @@ export function renderGraph(
   titleEl.textContent = 'Wärmeflussnetzwerk';
   svg.appendChild(titleEl);
 
+  const statsEl = document.createElementNS(NS, 'text');
+  statsEl.setAttribute('x',                String(cx));
+  statsEl.setAttribute('y',                '38');
+  statsEl.setAttribute('text-anchor',      'middle');
+  statsEl.setAttribute('dominant-baseline','central');
+  statsEl.setAttribute('class',            'sk-subtitle');
+  statsEl.textContent = `${nodes.length} Knoten  ·  ${edges.length} Kanten  ·  ${compCount} Komponenten`;
+  svg.appendChild(statsEl);
+
   // Edge layer — stroke/opacity/marker-end set at creation and by updateSelection();
   // draw() only updates the path 'd' and visibility.
   const edgeG = document.createElementNS(NS, 'g');
@@ -222,7 +259,7 @@ export function renderGraph(
     p.setAttribute('fill',         'none');
     p.setAttribute('stroke',       e.color);
     p.setAttribute('stroke-width', (1.0 + 4.0 * (e.flow / maxFlow)).toFixed(1));
-    p.setAttribute('opacity',      (0.28 + 0.52 * (e.flow / maxFlow)).toFixed(2));
+    p.setAttribute('opacity',      (0.20 + 0.80 * (e.flow / maxFlow)).toFixed(2));
     p.setAttribute('marker-end',   `url(#gv-arr-${e.color.replace('#', '')})`);
     edgeG.appendChild(p);
     return p;
@@ -245,22 +282,19 @@ export function renderGraph(
       rect.setAttribute('width',   String(nw));
       rect.setAttribute('height',  String(nh));
       rect.setAttribute('rx',      '7');
-      rect.setAttribute('fill',    C_NEIGHBOR);
+      rect.setAttribute('fill',    '#7c3aed');
       rect.setAttribute('opacity', '0.78');
       g.appendChild(rect);
       mkText(g, NS, node.label,                                0, -5, 'rgba(255,255,255,0.88)', '8',   'bold');
       const nt = mkText(g, NS, `${Math.round(node.heatLoad)} W`, 0,  7, 'rgba(255,255,255,0.55)', '7',   'normal', 'monospace');
       nodeElems.push({ mainShape: rect, nameText: nt, fullLabel: node.label, shortLabel: node.label });
     } else {
-      const frac   = node.heatLoad / maxHL;
-      const sat    = Math.round(40 + frac * 30);
-      const lum    = Math.round(28 + frac * 18);
       const circle = document.createElementNS(NS, 'circle');
       circle.setAttribute('cx',           '0');
       circle.setAttribute('cy',           '0');
       circle.setAttribute('r',            node.r.toFixed(1));
-      circle.setAttribute('fill',         `hsl(220,${sat}%,${lum}%)`);
-      circle.setAttribute('stroke',       'rgba(255,255,255,0.15)');
+      circle.setAttribute('fill',         'hsl(220,28%,28%)');
+      circle.setAttribute('stroke',       'rgba(255,255,255,0.18)');
       circle.setAttribute('stroke-width', '1');
       g.appendChild(circle);
 
