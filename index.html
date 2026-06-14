@@ -27,19 +27,6 @@
 
         <div class="toolbar-right">
 
-        <!-- Drawing tools -->
-        <div class="toolbar-group">
-          <button class="btn-tool" data-tool="select" title="Auswahl – Klicken / Ziehen zum Verschieben (Q)">
-            <svg class="tool-icon" viewBox="0 0 16 16" fill="none">
-              <path d="M3 2 L3 13 L6.5 9.5 L9 14 L10.5 13.3 L8 8 L12 8 Z"
-                    stroke="currentColor" stroke-width="1.1" fill="none"/>
-            </svg>
-            Auswahl
-          </button>
-        </div>
-
-        <div class="toolbar-sep"></div>
-
         <!-- View tabs: always available -->
         <div class="toolbar-group">
           <button class="btn btn-tab active" id="view-plan-btn" title="Grundriss (CAD-Ansicht)">Grundriss</button>
@@ -127,18 +114,8 @@
 
         <!-- Undo / Redo / New -->
         <div class="toolbar-group">
-          <button class="btn" id="undo-btn" title="Rückgängig (Ctrl+Z)">
-            <svg class="tool-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4">
-              <path d="M3 8 Q3 3 9 3 Q14 3 14 8 Q14 13 9 13 L6 13"/>
-              <path d="M6 10 L3 8 L6 5" fill="none"/>
-            </svg>
-          </button>
-          <button class="btn" id="redo-btn" title="Wiederholen (Ctrl+Y)">
-            <svg class="tool-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4">
-              <path d="M13 8 Q13 3 7 3 Q2 3 2 8 Q2 13 7 13 L10 13"/>
-              <path d="M10 10 L13 8 L10 5" fill="none"/>
-            </svg>
-          </button>
+          <button class="btn" id="undo-btn" title="Rückgängig (Ctrl+Z)" style="font-size:15px">↺</button>
+          <button class="btn" id="redo-btn" title="Wiederholen (Ctrl+Y)" style="font-size:15px">↻</button>
           <button class="btn btn-danger btn-sm" id="new-btn" title="Neues Projekt starten (alle Daten löschen)">Neu</button>
           <button class="btn btn-sm" id="example-btn" title="Beispielprojekt laden (aktuelles Projekt wird überschrieben)">Beispiel laden</button>
         </div>

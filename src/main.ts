@@ -400,6 +400,8 @@ window.addEventListener('keydown', e => {
     else if (s.selectedOpeningId) editor.deleteSelectedOpening();
   }
 
+  if (e.key === 'Escape') activateTool('select');
+
   if (!e.ctrlKey && !e.metaKey) {
     if (e.shiftKey && e.key === 'F') {
       editor.fitToFloor(canvas.width, canvas.height);
