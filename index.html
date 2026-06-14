@@ -40,9 +40,17 @@
 
         <div class="toolbar-sep"></div>
 
-        <!-- View tabs: Plan / Sankey -->
+        <!-- View tabs: always available -->
         <div class="toolbar-group">
           <button class="btn btn-tab active" id="view-plan-btn" title="Grundriss (CAD-Ansicht)">Grundriss</button>
+          <button class="btn btn-tab" id="view-settings-btn" title="Projekteinstellungen und Unsicherheitsanalyse">Einstellungen</button>
+        </div>
+
+        <div class="toolbar-sep"></div>
+
+        <!-- View tabs: available after calculation -->
+        <div class="toolbar-group">
+          <span class="toolbar-label">Analyse</span>
           <button class="btn btn-tab" id="view-sankey-btn" title="Sankey-Diagramm der Heizlastverteilung" disabled>Sankey</button>
           <button class="btn btn-tab" id="view-graph-btn" title="Wärmefluss-Netzwerk (Raumgraph)" disabled>Netzwerk</button>
           <button class="btn btn-tab" id="view-report-btn" title="Detaillierter Ergebnisbericht" disabled>Report</button>
@@ -173,13 +181,8 @@
       <!-- ══════════════════════════════ MAIN ══════════════════════════════ -->
       <div id="main">
 
-        <!-- Left panel: project info + library + rooms sub-panels -->
+        <!-- Left panel: library + rooms sub-panels -->
         <div id="leftpanel">
-          <div id="project-subpanel" class="subpanel subpanel-fixed">
-            <div class="subpanel-header">Projekt</div>
-            <div id="project-content"></div>
-          </div>
-          <div class="subpanel-sep"></div>
           <div id="lib-subpanel" class="subpanel">
             <div class="subpanel-header">Bibliothek</div>
             <div id="leftpanel-scroll" class="subpanel-scroll">
@@ -221,6 +224,9 @@
 
         <!-- Report view -->
         <div id="report-view" style="display:none"></div>
+
+        <!-- Settings view -->
+        <div id="settings-view" style="display:none"></div>
 
         <!-- Sidebar -->
         <div id="sidebar">

@@ -6,10 +6,10 @@ import { renderFloor } from './editor/canvasRenderer.js';
 import { renderPropertyPanel } from './ui/propertyPanel.js';
 import { renderLibraryPanel } from './ui/libraryPanel.js';
 import { renderRoomPanel } from './ui/roomPanel.js';
-import { renderProjectPanel } from './ui/projectPanel.js';
 import { renderResultsBench, renderSankey } from './ui/resultsPanel.js';
 import { renderGraph } from './ui/graphView.js';
 import { renderReport } from './ui/reportView.js';
+import { renderSettingsView } from './ui/settingsView.js';
 import { calculateHeizlast } from './calc/heizlast.js';
 import { exportPdf } from './ui/pdfExport.js';
 import type { Project, Room } from './model/types.js';
@@ -72,7 +72,6 @@ editor.onChange(() => {
   saveProject(editor.getProject() as Project);
   scheduleRender();
   updateCursor();
-  refreshProjectPanel();
   refreshSidebar();
   refreshLeftPanel();
   refreshRoomPanel();
@@ -80,14 +79,6 @@ editor.onChange(() => {
   refreshResultsBench();
   updateStatusBar();
 });
-
-// ---- Left panel: project info ----
-const projectContent = document.getElementById('project-content')!;
-
-function refreshProjectPanel(): void {
-  renderProjectPanel(projectContent, editor.getProject() as Project, editor);
-}
-refreshProjectPanel();
 
 // ---- Left panel: library ----
 const leftPanelContent = document.getElementById('leftpanel-content')!;
@@ -161,25 +152,31 @@ function refreshResultsBench(): void {
   }
 }
 
-// ---- View tabs: Grundriss / Sankey / Netzwerk / Report ----
-const canvasContainer = document.getElementById('canvas-container')!;
-const sankeyView      = document.getElementById('sankey-view')!;
-const graphView       = document.getElementById('graph-view')!;
-const reportView      = document.getElementById('report-view')!;
-const viewPlanBtn     = document.getElementById('view-plan-btn')!;
-const viewSankeyBtn   = document.getElementById('view-sankey-btn')!;
-const viewGraphBtn    = document.getElementById('view-graph-btn')!;
-const viewReportBtn   = document.getElementById('view-report-btn')!;
+// ---- View tabs: Grundriss / Sankey / Netzwerk / Report / Einstellungen ----
+const canvasContainer  = document.getElementById('canvas-container')!;
+const sankeyView       = document.getElementById('sankey-view')!;
+const graphView        = document.getElementById('graph-view')!;
+const reportView       = document.getElementById('report-view')!;
+const settingsViewEl   = document.getElementById('settings-view')!;
+const viewPlanBtn      = document.getElementById('view-plan-btn')!;
+const viewSankeyBtn    = document.getElementById('view-sankey-btn')!;
+const viewGraphBtn     = document.getElementById('view-graph-btn')!;
+const viewReportBtn    = document.getElementById('view-report-btn')!;
+const viewSettingsBtn  = document.getElementById('view-settings-btn')!;
 
-function activateView(view: 'plan' | 'sankey' | 'graph' | 'report'): void {
-  canvasContainer.style.display = 'none';
-  sankeyView.style.display      = 'none';
-  graphView.style.display       = 'none';
-  reportView.style.display      = 'none';
+type ViewName = 'plan' | 'sankey' | 'graph' | 'report' | 'settings';
+
+function activateView(view: ViewName): void {
+  canvasContainer.style.display  = 'none';
+  sankeyView.style.display       = 'none';
+  graphView.style.display        = 'none';
+  reportView.style.display       = 'none';
+  settingsViewEl.style.display   = 'none';
   viewPlanBtn.classList.remove('active');
   viewSankeyBtn.classList.remove('active');
   viewGraphBtn.classList.remove('active');
   viewReportBtn.classList.remove('active');
+  viewSettingsBtn.classList.remove('active');
 
   const state = editor.getState();
   if (view === 'plan') {
@@ -194,17 +191,29 @@ function activateView(view: 'plan' | 'sankey' | 'graph' | 'report'): void {
     graphView.style.display = 'flex';
     viewGraphBtn.classList.add('active');
     if (state.heizlastResult) renderGraph(graphView, state.heizlastResult, editor.getProject() as Project);
-  } else {
+  } else if (view === 'report') {
     reportView.style.display = 'flex';
     viewReportBtn.classList.add('active');
     if (state.heizlastResult) renderReport(reportView, state.heizlastResult, editor.getProject() as Project, editor);
+  } else {
+    settingsViewEl.style.display = 'flex';
+    viewSettingsBtn.classList.add('active');
+    renderSettingsView(settingsViewEl, editor.getProject() as Project, editor);
   }
 }
 
-viewPlanBtn.addEventListener('click',   () => activateView('plan'));
-viewSankeyBtn.addEventListener('click', () => activateView('sankey'));
-viewGraphBtn.addEventListener('click',  () => activateView('graph'));
-viewReportBtn.addEventListener('click', () => activateView('report'));
+// Re-render settings view live when project changes and it is visible
+editor.onChange(() => {
+  if (settingsViewEl.style.display !== 'none') {
+    renderSettingsView(settingsViewEl, editor.getProject() as Project, editor);
+  }
+});
+
+viewPlanBtn.addEventListener('click',     () => activateView('plan'));
+viewSankeyBtn.addEventListener('click',   () => activateView('sankey'));
+viewGraphBtn.addEventListener('click',    () => activateView('graph'));
+viewReportBtn.addEventListener('click',   () => activateView('report'));
+viewSettingsBtn.addEventListener('click', () => activateView('settings'));
 
 // ---- Toolbar tools ----
 function activateTool(tool: ToolMode): void {

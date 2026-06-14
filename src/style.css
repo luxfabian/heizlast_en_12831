@@ -1831,3 +1831,70 @@ details[open] .rp-collapsible-title::before { content: '▾ '; }
 .rp-muted { color: var(--text-dim); font-size: 11px; }
 
 .rp-surf-table { font-size: 11px; }
+
+/* ═══════════════════════════════════════════════════
+   SETTINGS VIEW
+═══════════════════════════════════════════════════ */
+#settings-view {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  background: var(--bg-surface);
+  overflow-y: auto;
+  flex-direction: column;
+  align-items: center;
+}
+#settings-view::-webkit-scrollbar { width: 6px; }
+#settings-view::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+.sv-wrap {
+  width: 100%;
+  max-width: 640px;
+  padding: 28px 36px;
+  box-sizing: border-box;
+}
+
+.sv-section {
+  margin-bottom: 28px;
+}
+
+/* sv-field: label left (fixed width) + control right + optional note below control */
+.sv-field {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  column-gap: 16px;
+  row-gap: 3px;
+  align-items: center;
+  padding: 8px 0;
+  border-top: 1px solid var(--border);
+}
+
+.sv-field:first-of-type { border-top: none; }
+
+.sv-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.3;
+}
+
+.sv-input {
+  width: 180px;
+}
+
+/* note sits in the second column, below the control */
+.sv-note {
+  grid-column: 2;
+  font-size: 10px;
+  color: var(--text-dim);
+  font-family: "Courier New", monospace;
+}
+.sv-note-ok   { color: var(--green); }
+.sv-note-warn { color: var(--amber); }
+.sv-note-err  { color: var(--red);   }
+
+.sv-desc {
+  font-size: 12px;
+  color: var(--text-dim);
+  line-height: 1.6;
+  margin: 0 0 14px 0;
+}

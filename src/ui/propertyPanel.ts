@@ -1,4 +1,4 @@
-import type { Room, WallSegment, Opening, BoundaryCategory, RoomCeiling, RoomFloor, Project } from '../model/types.js';
+import type { Room, WallSegment, Opening, BoundaryCategory, RoomCeiling, RoomFloor } from '../model/types.js';
 import type { Editor } from '../editor/editorState.js';
 import { getBoundaryCategoryLabel, getBoundaryCategoryColor } from '../editor/adjacency.js';
 import { getRoomPolygon, polygonIntersectionArea } from '../calc/heizlast.js';
@@ -95,47 +95,15 @@ export function renderPropertyPanel(container: HTMLElement, editor: Editor): voi
     if (selFloor) { renderFloorPropertiesPanel(container, selFloor, editor, _proj); return; }
   }
 
-  // Nothing selected — show hint + project-level settings
+  // Nothing selected — show hint
   const hint = el('div', { class: 'panel-hint' });
   hint.innerHTML = `
     <div class="hint-icon">↖</div>
     <div>Element auswählen oder Werkzeug wählen</div>
     <div class="hint-sub">Q = Auswahl · W = Wand · F = Fenster · T = Tür · G = Tor</div>
+    <div class="hint-sub" style="margin-top:8px">Projekteinstellungen → Tab Einstellungen</div>
   `;
   container.appendChild(hint);
-
-  renderUncertaintySection(container, _proj, editor);
-}
-
-function renderUncertaintySection(container: HTMLElement, proj: Project, editor: Editor): void {
-  const sec = section('Unsicherheitsanalyse');
-  container.appendChild(sec);
-
-  const note = el('div', { class: 'panel-info' });
-  note.innerHTML = 'Gausssche Fehlerfortpflanzung · systematisches Modell · Ergebnis als ±σ';
-  sec.appendChild(note);
-
-  const unc = proj.uncertainty ?? { uRelPct: 0, aRelPct: 0, nRelPct: 0 };
-
-  function updateUnc(patch: Partial<typeof unc>): void {
-    const current = (editor.getProject() as Project).uncertainty ?? { uRelPct: 0, aRelPct: 0, nRelPct: 0 };
-    editor.updateProject({ uncertainty: { ...current, ...patch } });
-  }
-
-  const uInp = numInput(unc.uRelPct, 0, 50);
-  uInp.step = '1';
-  uInp.addEventListener('change', () => updateUnc({ uRelPct: Number(uInp.value) }));
-  sec.appendChild(field('ε_U — U-Wert (%)', uInp));
-
-  const aInp = numInput(unc.aRelPct, 0, 50);
-  aInp.step = '1';
-  aInp.addEventListener('change', () => updateUnc({ aRelPct: Number(aInp.value) }));
-  sec.appendChild(field('ε_A — Fläche (%)', aInp));
-
-  const nInp = numInput(unc.nRelPct, 0, 50);
-  nInp.step = '1';
-  nInp.addEventListener('change', () => updateUnc({ nRelPct: Number(nInp.value) }));
-  sec.appendChild(field('ε_n — Luftwechsel (%)', nInp));
 }
 
 // ---- Room panel ----
