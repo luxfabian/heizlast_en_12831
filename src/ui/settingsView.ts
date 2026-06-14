@@ -81,11 +81,11 @@ export function renderSettingsView(container: HTMLElement, project: Project, edi
     'Das Ergebnis erscheint als Φ<sub>HL</sub> ± σ in Report und Zusammenfassung.';
   uncSec.appendChild(desc);
 
-  const unc = project.uncertainty ?? { uRelPct: 0, aRelPct: 0, nRelPct: 0 };
+  const unc = project.uncertainty ?? { uRelPct: 5, aRelPct: 5, nRelPct: 5 };
 
   function updateUnc(patch: Partial<typeof unc>): void {
     const current = (editor.getProject() as Project).uncertainty
-      ?? { uRelPct: 0, aRelPct: 0, nRelPct: 0 };
+      ?? { uRelPct: 5, aRelPct: 5, nRelPct: 5 };
     editor.updateProject({ uncertainty: { ...current, ...patch } });
   }
 

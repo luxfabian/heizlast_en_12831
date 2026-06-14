@@ -588,8 +588,8 @@ export function calculateHeizlast(project: Project): HeizlastResult {
 
   // ── Gaussian error propagation (systematic / correlated model) ───────────
   let sigmaW: number | undefined;
-  if (project.uncertainty) {
-    const { uRelPct, aRelPct, nRelPct } = project.uncertainty;
+  {
+    const { uRelPct = 5, aRelPct = 5, nRelPct = 5 } = project.uncertainty ?? {};
     const eU = uRelPct / 100;
     const eA = aRelPct / 100;
     const eN = nRelPct / 100;
