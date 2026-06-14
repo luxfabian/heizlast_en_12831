@@ -739,6 +739,11 @@ function renderWallPanel(container: HTMLElement, wall: WallSegment, editor: Edit
   const sec = section('Wand');
   container.appendChild(sec);
 
+  // Label (human-readable reference)
+  const labelInp = el('input', { type: 'text', class: 'input', value: wall.label ?? '', placeholder: 'Wandsegment …' }) as HTMLInputElement;
+  labelInp.addEventListener('change', () => editor.updateWall(wall.id, { label: labelInp.value.trim() || undefined }));
+  sec.appendChild(field('Bezeichnung', labelInp));
+
   // Wall type preset dropdown
   const custom = loadCustomPresets();
   const allWallPresets: WallTypePreset[] = [...WALL_PRESETS, ...custom.walls];
@@ -816,6 +821,11 @@ function renderOpeningPanel(container: HTMLElement, op: Opening, editor: Editor)
   const typeLabel = op.type === 'window' ? 'Fenster' : op.type === 'door' ? 'Tür' : 'Garagentor';
   const sec = section(typeLabel);
   container.appendChild(sec);
+
+  // Label (human-readable reference)
+  const labelInp = el('input', { type: 'text', class: 'input', value: op.label ?? '', placeholder: `${typeLabel} …` }) as HTMLInputElement;
+  labelInp.addEventListener('change', () => editor.updateOpening(op.id, { label: labelInp.value.trim() || undefined }));
+  sec.appendChild(field('Bezeichnung', labelInp));
 
   // Opening type preset dropdown
   const customPresets = loadCustomPresets();

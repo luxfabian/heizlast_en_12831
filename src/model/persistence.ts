@@ -67,6 +67,43 @@ export function migrateProject(p: unknown): Project {
     }
   }
 
+  // Backfill labels for elements created before auto-labelling was introduced
+  {
+    type RawFloor = { walls: Record<string, unknown>[]; openings: Record<string, unknown>[] };
+    const floors = proj.floors as RawFloor[];
+
+    // Pass 1: find highest existing number per type
+    let wallMax = 0, winMax = 0, doorMax = 0, gdMax = 0;
+    for (const f of floors) {
+      for (const w of f.walls) {
+        const m = typeof w.label === 'string' ? w.label.match(/(\d+)$/) : null;
+        if (m) wallMax = Math.max(wallMax, parseInt(m[1], 10));
+      }
+      for (const o of f.openings) {
+        const m = typeof o.label === 'string' ? o.label.match(/(\d+)$/) : null;
+        if (m) {
+          if (o.type === 'window')           winMax  = Math.max(winMax,  parseInt(m[1], 10));
+          else if (o.type === 'door')        doorMax = Math.max(doorMax, parseInt(m[1], 10));
+          else if (o.type === 'garage_door') gdMax   = Math.max(gdMax,   parseInt(m[1], 10));
+        }
+      }
+    }
+
+    // Pass 2: assign labels to unlabelled elements
+    for (const f of floors) {
+      for (const w of f.walls) {
+        if (!w.label) w.label = `Wandsegment ${++wallMax}`;
+      }
+      for (const o of f.openings) {
+        if (!o.label) {
+          if (o.type === 'window')           o.label = `Fenster ${++winMax}`;
+          else if (o.type === 'door')        o.label = `Tür ${++doorMax}`;
+          else if (o.type === 'garage_door') o.label = `Garagentor ${++gdMax}`;
+        }
+      }
+    }
+  }
+
   if (!Array.isArray(proj.hullGroups)) {
     proj.hullGroups = DEFAULT_HULL_GROUPS.map(g => ({ ...g, id: uuidv4() }));
   } else {

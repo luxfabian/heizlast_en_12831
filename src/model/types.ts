@@ -13,6 +13,8 @@ export interface Point2D {
 
 export interface WallSegment {
   id: string;
+  /** Human-readable reference, e.g. "Wandsegment 3". Auto-assigned on creation, user-editable. */
+  label?: string;
   start: Point2D;
   end: Point2D;
   /** Visual and thermal thickness in mm */

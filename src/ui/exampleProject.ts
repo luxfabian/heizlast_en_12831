@@ -53,25 +53,25 @@ export function createExampleProject(): Project {
 
   // ── EG ─────────────────────────────────────────────────────────────────
   const egWalls: WallSegment[] = [
-    ext('e1',  0,     0,    4500,  0),      // N – Garage
-    ext('e2',  4500,  0,    10000, 0),      // N – Küche
-    ext('e3',  10000, 0,    10000, 4000),   // E – Küche
-    ext('e4',  10000, 4000, 10000, 8000),   // E – Wohnzimmer
-    ext('e5',  10000, 8000, 0,     8000),   // S – Wohnzimmer
-    ext('e6',  0,     8000, 0,     4000),   // W – Wohnzimmer
-    ext('e7',  0,     4000, 0,     0),      // W – Garage
-    int('e8',  4500,  0,    4500,  4000),   // Garage | Küche
-    int('e9',  0,     4000, 4500,  4000),   // Garage | Wohnzimmer
-    int('e10', 4500,  4000, 10000, 4000),   // Küche  | Wohnzimmer
+    { ...ext('e1',  0,     0,    4500,  0),      label: 'Wandsegment 1'  },  // N – Garage
+    { ...ext('e2',  4500,  0,    10000, 0),      label: 'Wandsegment 2'  },  // N – Küche
+    { ...ext('e3',  10000, 0,    10000, 4000),   label: 'Wandsegment 3'  },  // E – Küche
+    { ...ext('e4',  10000, 4000, 10000, 8000),   label: 'Wandsegment 4'  },  // E – Wohnzimmer
+    { ...ext('e5',  10000, 8000, 0,     8000),   label: 'Wandsegment 5'  },  // S – Wohnzimmer
+    { ...ext('e6',  0,     8000, 0,     4000),   label: 'Wandsegment 6'  },  // W – Wohnzimmer
+    { ...ext('e7',  0,     4000, 0,     0),      label: 'Wandsegment 7'  },  // W – Garage
+    { ...int('e8',  4500,  0,    4500,  4000),   label: 'Wandsegment 8'  },  // Garage | Küche
+    { ...int('e9',  0,     4000, 4500,  4000),   label: 'Wandsegment 9'  },  // Garage | Wohnzimmer
+    { ...int('e10', 4500,  4000, 10000, 4000),   label: 'Wandsegment 10' },  // Küche  | Wohnzimmer
   ];
   const egOpenings: Opening[] = [
-    gd('eo1',  'e1', 750),                  // Garagentor (N)
-    door('eo2','e2', 1000, true),           // Eingangstür (N)
-    win('eo3', 'e3', 1000),                 // Fenster Küche (E)
-    win('eo4', 'e4', 1000, 1500, 1200),     // Fenster Wohnzimmer (E)
-    win('eo5', 'e5', 1500, 2000, 1200),     // Fenster Wohnzimmer (S) 1
-    win('eo6', 'e5', 5500, 2000, 1200),     // Fenster Wohnzimmer (S) 2
-    win('eo7', 'e6', 1000, 1500, 1200),     // Fenster Wohnzimmer (W)
+    { ...gd('eo1',   'e1', 750),              label: 'Garagentor 1' },  // Garagentor (N)
+    { ...door('eo2', 'e2', 1000, true),       label: 'Tür 1'        },  // Eingangstür (N)
+    { ...win('eo3',  'e3', 1000),             label: 'Fenster 1'    },  // Fenster Küche (E)
+    { ...win('eo4',  'e4', 1000, 1500, 1200), label: 'Fenster 2'    },  // Fenster Wohnzimmer (E)
+    { ...win('eo5',  'e5', 1500, 2000, 1200), label: 'Fenster 3'    },  // Fenster Wohnzimmer (S) 1
+    { ...win('eo6',  'e5', 5500, 2000, 1200), label: 'Fenster 4'    },  // Fenster Wohnzimmer (S) 2
+    { ...win('eo7',  'e6', 1000, 1500, 1200), label: 'Fenster 5'    },  // Fenster Wohnzimmer (W)
   ];
   const egRooms: Room[] = [
     {
@@ -103,25 +103,25 @@ export function createExampleProject(): Project {
 
   // ── 1. OG ───────────────────────────────────────────────────────────────
   const ogWalls: WallSegment[] = [
-    ext('o1',  0,     0,    6000,  0),      // N – Schlafzimmer 1
-    ext('o2',  6000,  0,    10000, 0),      // N – Schlafzimmer 2
-    ext('o3',  10000, 0,    10000, 4000),   // E – Schlafzimmer 2
-    ext('o4',  10000, 4000, 10000, 8000),   // E – Bad
-    ext('o5',  10000, 8000, 6000,  8000),   // S – Bad
-    ext('o6',  6000,  8000, 0,     8000),   // S – Schlafzimmer 1
-    ext('o7',  0,     8000, 0,     0),      // W – Schlafzimmer 1
-    int('o8',  6000,  0,    6000,  4000),   // Schlafzimmer 1 | Schlafzimmer 2
-    int('o9',  6000,  4000, 6000,  8000),   // Schlafzimmer 1 | Bad
-    int('o10', 6000,  4000, 10000, 4000),   // Schlafzimmer 2 | Bad
+    { ...ext('o1',  0,     0,    6000,  0),      label: 'Wandsegment 11' },  // N – Schlafzimmer 1
+    { ...ext('o2',  6000,  0,    10000, 0),      label: 'Wandsegment 12' },  // N – Schlafzimmer 2
+    { ...ext('o3',  10000, 0,    10000, 4000),   label: 'Wandsegment 13' },  // E – Schlafzimmer 2
+    { ...ext('o4',  10000, 4000, 10000, 8000),   label: 'Wandsegment 14' },  // E – Bad
+    { ...ext('o5',  10000, 8000, 6000,  8000),   label: 'Wandsegment 15' },  // S – Bad
+    { ...ext('o6',  6000,  8000, 0,     8000),   label: 'Wandsegment 16' },  // S – Schlafzimmer 1
+    { ...ext('o7',  0,     8000, 0,     0),      label: 'Wandsegment 17' },  // W – Schlafzimmer 1
+    { ...int('o8',  6000,  0,    6000,  4000),   label: 'Wandsegment 18' },  // Schlafzimmer 1 | Schlafzimmer 2
+    { ...int('o9',  6000,  4000, 6000,  8000),   label: 'Wandsegment 19' },  // Schlafzimmer 1 | Bad
+    { ...int('o10', 6000,  4000, 10000, 4000),   label: 'Wandsegment 20' },  // Schlafzimmer 2 | Bad
   ];
   const ogOpenings: Opening[] = [
-    win('oo1', 'o7', 1000, 1500, 1200),     // Fenster Schl.1 (W) 1
-    win('oo2', 'o7', 5000, 1500, 1200),     // Fenster Schl.1 (W) 2
-    win('oo3', 'o1', 1500, 1500, 1200),     // Fenster Schl.1 (N)
-    win('oo4', 'o2',  500, 1500, 1200),     // Fenster Schl.2 (N)
-    win('oo5', 'o4', 1500,  800,  800),     // Fenster Bad (E)
-    win('oo6', 'o6', 1000, 1500, 1200),     // Fenster Schl.1 (S)
-    door('oo7','o8', 1500),                 // Tür Schl.1 ↔ Schl.2
+    { ...win('oo1',  'o7', 1000, 1500, 1200), label: 'Fenster 6'  },  // Fenster Schl.1 (W) 1
+    { ...win('oo2',  'o7', 5000, 1500, 1200), label: 'Fenster 7'  },  // Fenster Schl.1 (W) 2
+    { ...win('oo3',  'o1', 1500, 1500, 1200), label: 'Fenster 8'  },  // Fenster Schl.1 (N)
+    { ...win('oo4',  'o2',  500, 1500, 1200), label: 'Fenster 9'  },  // Fenster Schl.2 (N)
+    { ...win('oo5',  'o4', 1500,  800,  800), label: 'Fenster 10' },  // Fenster Bad (E)
+    { ...win('oo6',  'o6', 1000, 1500, 1200), label: 'Fenster 11' },  // Fenster Schl.1 (S)
+    { ...door('oo7', 'o8', 1500),             label: 'Tür 2'      },  // Tür Schl.1 ↔ Schl.2
   ];
   const ogRooms: Room[] = [
     {
@@ -153,20 +153,20 @@ export function createExampleProject(): Project {
 
   // ── Dachgeschoss ────────────────────────────────────────────────────────
   const dgWalls: WallSegment[] = [
-    ext('d1', 0,     0,    10000, 0),       // N – Büro
-    ext('d2', 10000, 0,    10000, 5000),    // E – Büro
-    int('d3', 10000, 5000, 0,     5000),    // Büro | Abstellraum
-    ext('d4', 0,     5000, 0,     0),       // W – Büro
-    ext('d5', 10000, 5000, 10000, 8000),    // E – Abstellraum
-    ext('d6', 10000, 8000, 0,     8000),    // S/Dach – Abstellraum
-    ext('d7', 0,     8000, 0,     5000),    // W – Abstellraum
+    { ...ext('d1', 0,     0,    10000, 0),    label: 'Wandsegment 21' },  // N – Büro
+    { ...ext('d2', 10000, 0,    10000, 5000), label: 'Wandsegment 22' },  // E – Büro
+    { ...int('d3', 10000, 5000, 0,     5000), label: 'Wandsegment 23' },  // Büro | Abstellraum
+    { ...ext('d4', 0,     5000, 0,     0),    label: 'Wandsegment 24' },  // W – Büro
+    { ...ext('d5', 10000, 5000, 10000, 8000), label: 'Wandsegment 25' },  // E – Abstellraum
+    { ...ext('d6', 10000, 8000, 0,     8000), label: 'Wandsegment 26' },  // S/Dach – Abstellraum
+    { ...ext('d7', 0,     8000, 0,     5000), label: 'Wandsegment 27' },  // W – Abstellraum
   ];
   const dgOpenings: Opening[] = [
-    win('do1', 'd1', 1500, 1500, 1200),     // Fenster Büro (N) 1
-    win('do2', 'd1', 6500, 1500, 1200),     // Fenster Büro (N) 2
-    win('do3', 'd2', 1000, 1500, 1200),     // Fenster Büro (E)
-    win('do4', 'd4', 1000, 1500, 1200),     // Fenster Büro (W)
-    door('do5','d3', 4500),                 // Tür Büro ↔ Abstellraum
+    { ...win('do1',  'd1', 1500, 1500, 1200), label: 'Fenster 12' },  // Fenster Büro (N) 1
+    { ...win('do2',  'd1', 6500, 1500, 1200), label: 'Fenster 13' },  // Fenster Büro (N) 2
+    { ...win('do3',  'd2', 1000, 1500, 1200), label: 'Fenster 14' },  // Fenster Büro (E)
+    { ...win('do4',  'd4', 1000, 1500, 1200), label: 'Fenster 15' },  // Fenster Büro (W)
+    { ...door('do5', 'd3', 4500),             label: 'Tür 3'      },  // Tür Büro ↔ Abstellraum
   ];
   const dgRooms: Room[] = [
     {

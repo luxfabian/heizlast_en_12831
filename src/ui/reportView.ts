@@ -2,6 +2,7 @@ import type { HeizlastResult, Project, Room, RoomHeizlastResult, BoundaryCategor
 import { getBoundaryCategoryLabel } from '../editor/adjacency.js';
 import type { Editor } from '../editor/editorState.js';
 import { renderHullGroupEditor } from './resultsPanel.js';
+import { getElementName } from '../model/elementLabel.js';
 
 function el<K extends keyof HTMLElementTagNameMap>(
   tag: K, attrs: Record<string, string> = {},
@@ -13,11 +14,6 @@ function el<K extends keyof HTMLElementTagNameMap>(
     e.appendChild(typeof c === 'string' ? document.createTextNode(c) : c);
   return e;
 }
-
-const TYPE_DE: Record<string, string> = {
-  wall: 'Wand', window: 'Fenster', door: 'Tür',
-  garage_door: 'Tor', floor: 'Boden', ceiling: 'Decke',
-};
 
 const CAT_ORDER: Record<string, number> = {
   exterior: 0, unheated: 1, ground: 2, adj_heated: 3, adj_reduced: 4,
@@ -182,7 +178,7 @@ export function renderReport(
     const rr = result.rooms.find(r => r.roomId === roomId);
     const room = roomMap.get(roomId);
     if (!rr || !room) return;
-    renderRoomDetail(detailDiv, rr.result, room, roomMap);
+    renderRoomDetail(detailDiv, rr.result, room, roomMap, project);
   };
 
   trigger.addEventListener('click', (e) => {
@@ -213,6 +209,7 @@ function renderRoomDetail(
   res: RoomHeizlastResult,
   room: Room,
   roomMap: Map<string, Room>,
+  project: Project,
 ): void {
   const area = room.area ?? 0;
   const spec = area > 0 ? res.totalLoss / area : 0;
@@ -316,7 +313,7 @@ function renderRoomDetail(
     const adjRoom = e.adjacentRoomId ? roomMap.get(e.adjacentRoomId) : undefined;
     const tr = el('tr', {});
     tr.innerHTML = `
-      <td>${TYPE_DE[e.elementType] ?? e.elementType}</td>
+      <td>${getElementName(project, e.elementId, e.elementType)}</td>
       <td class="rp-muted">${adjRoom ? adjRoom.label : '—'}</td>
       <td class="rp-num">${e.area.toFixed(2)}</td>
       <td class="rp-num">${e.uValue.toFixed(3)}</td>

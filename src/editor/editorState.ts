@@ -452,6 +452,7 @@ export class Editor {
     this.pushUndo();
     const newWall: WallSegment = {
       id: uuidv4(),
+      label: this.nextWallLabel(),
       start,
       end,
       thickness: preset?.thickness ?? 300,
@@ -489,6 +490,7 @@ export class Editor {
     const pos = Math.max(0, Math.min(wallLen - defaultWidth, bestT * wallLen - defaultWidth / 2));
     const opening: Opening = {
       id: uuidv4(), type,
+      label: this.nextOpeningLabel(type),
       wallId: bestWall.id,
       positionAlongWall: pos,
       width:   defaultWidth,
@@ -499,6 +501,32 @@ export class Editor {
     this.project = this.replaceActiveFloor({ ...this.floor, openings: [...this.floor.openings, opening] });
     this.state.tool = 'select';
     this.notify();
+  }
+
+  // ---- Auto-labeling helpers ----
+
+  private nextWallLabel(): string {
+    let max = 0;
+    for (const floor of this.project.floors) {
+      for (const w of floor.walls) {
+        const m = w.label?.match(/(\d+)$/);
+        if (m) max = Math.max(max, parseInt(m[1], 10));
+      }
+    }
+    return `Wandsegment ${max + 1}`;
+  }
+
+  private nextOpeningLabel(type: 'window' | 'door' | 'garage_door'): string {
+    const prefix = type === 'window' ? 'Fenster' : type === 'door' ? 'Tür' : 'Garagentor';
+    let max = 0;
+    for (const floor of this.project.floors) {
+      for (const o of floor.openings) {
+        if (o.type !== type) continue;
+        const m = o.label?.match(/(\d+)$/);
+        if (m) max = Math.max(max, parseInt(m[1], 10));
+      }
+    }
+    return `${prefix} ${max + 1}`;
   }
 
   // ---- Mutations ----

@@ -1,6 +1,7 @@
 import { jsPDF } from 'jspdf';
 import type { HeizlastResult, Project, Room } from '../model/types.js';
 import { getBoundaryCategoryLabel } from '../editor/adjacency.js';
+import { getElementName } from '../model/elementLabel.js';
 
 // ── Layout constants ──────────────────────────────────────────────────────────
 const LM = 15, RM = 15;
@@ -237,11 +238,7 @@ export function exportPdf(project: Project, result: HeizlastResult): void {
     for (const e of rr.result.elementBreakdown) {
       if (e.heatLoss < 0.5) continue;
       needY(5);
-      const tl = e.elementType === 'wall'       ? 'Wand'    :
-                 e.elementType === 'window'      ? 'Fenster' :
-                 e.elementType === 'door'        ? 'Tür'     :
-                 e.elementType === 'garage_door' ? 'Tor'     :
-                 e.elementType === 'floor'       ? 'Boden'   : 'Decke';
+      const tl = getElementName(project, e.elementId, e.elementType);
       const tadj = (ti - e.actualDeltaT).toFixed(0);
       tblRow(doc, LM, y, [
         tl,

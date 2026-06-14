@@ -1,6 +1,5 @@
 import type { Floor, Room, Project } from '../model/types.js';
 import type { Editor } from '../editor/editorState.js';
-import { getBoundaryCategoryLabel } from '../editor/adjacency.js';
 import { wallLength } from '../editor/geometry.js';
 
 // Persist expand/collapse state across re-renders
@@ -181,12 +180,9 @@ function buildRoomBody(container: HTMLElement, room: Room, floor: Floor, editor?
     ));
     table.appendChild(thead);
 
-    const counters = new Map<string, number>();
-    const count = (key: string) => { const n = (counters.get(key) ?? 0) + 1; counters.set(key, n); return n; };
-
     const tbody = el('tbody');
     for (const row of room.heizlastResult.elementBreakdown) {
-      const { label, wallId, openingId } = elementLabel(row.elementId, row.elementType, floor, room, count);
+      const { label, wallId, openingId } = elementLabel(row.elementId, row.elementType, floor, room);
       const lossW    = Math.round(row.heatLoss);
       const canClick = !!(wallId || openingId);
       const tr = el('tr', { class: [row.heatLoss < 0.5 ? 'row-zero' : '', canClick ? 'row-clickable' : ''].join(' ').trim() },
@@ -225,9 +221,6 @@ function buildRoomBody(container: HTMLElement, room: Room, floor: Floor, editor?
     ));
     table.appendChild(thead);
 
-    const counters = new Map<string, number>();
-    const count = (key: string) => { const n = (counters.get(key) ?? 0) + 1; counters.set(key, n); return n; };
-
     const tbody = el('tbody');
     for (const wallId of room.wallIds) {
       const wall = floor.walls.find(w => w.id === wallId);
@@ -236,10 +229,8 @@ function buildRoomBody(container: HTMLElement, room: Room, floor: Floor, editor?
       const grossM2  = (wallLength(wall.start, wall.end) * room.ceilingHeight) / 1e6;
       const openM2   = wallOpenings.reduce((s, o) => s + (o.width * o.height) / 1e6, 0);
       const netM2    = Math.max(0, grossM2 - openM2);
-      const catLabel = getBoundaryCategoryLabel(wall.boundaryCategory);
-      const n        = count(`wall_${wall.boundaryCategory}`);
       const tr = el('tr', { class: 'row-clickable' },
-        el('td', {}, `${catLabel} ${n}`),
+        el('td', {}, wall.label ?? 'Wand'),
         el('td', { class: 'num' }, `${netM2.toFixed(2)}`),
       );
       if (editor) {
@@ -249,9 +240,7 @@ function buildRoomBody(container: HTMLElement, room: Room, floor: Floor, editor?
       tbody.appendChild(tr);
 
       for (const op of wallOpenings) {
-        const opBase  = op.type === 'window' ? 'Fenster' : op.type === 'door' ? 'Tür' : 'Garagentor';
-        const opN     = count(op.type);
-        const opLabel = op.label ? op.label : `${opBase} ${opN}`;
+        const opLabel = op.label ?? (op.type === 'window' ? 'Fenster' : op.type === 'door' ? 'Tür' : 'Garagentor');
         const opTr = el('tr', { class: 'row-opening row-clickable' },
           el('td', {}, `↳ ${opLabel}`),
           el('td', { class: 'num' }, `${((op.width * op.height) / 1e6).toFixed(2)}`),
@@ -285,24 +274,19 @@ function elementLabel(
   elementType: string,
   floor: Floor,
   room: Room,
-  count: (key: string) => number,
 ): { label: string; wallId?: string; openingId?: string } {
   switch (elementType) {
     case 'wall': {
       const wall = floor.walls.find(w => w.id === elementId);
       if (!wall) return { label: 'Wand' };
-      const catLabel = getBoundaryCategoryLabel(wall.boundaryCategory);
-      const n = count(`wall_${wall.boundaryCategory}`);
-      return { label: `${catLabel} ${n}`, wallId: wall.id };
+      return { label: wall.label ?? 'Wand', wallId: wall.id };
     }
     case 'window':
     case 'door':
     case 'garage_door': {
-      const op = floor.openings.find(o => o.id === elementId);
+      const op   = floor.openings.find(o => o.id === elementId);
       const base = elementType === 'window' ? 'Fenster' : elementType === 'door' ? 'Tür' : 'Garagentor';
-      const n    = count(elementType);
-      const name = op?.label ? op.label : `${base} ${n}`;
-      return { label: name, openingId: elementId };
+      return { label: op?.label ?? base, openingId: elementId };
     }
     case 'floor': {
       const idx   = parseInt(elementId.split('_floor_')[1] ?? '0', 10);
